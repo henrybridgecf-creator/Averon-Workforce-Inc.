@@ -1,0 +1,9 @@
+{
+  "name": "AverPay - Freelance Management Portal",
+  "description": "Premium secure platform for Averon Workforce members to manage projects, track global earnings, and execute secure withdrawals.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone",
+    "geolocation"
+  ]
+}

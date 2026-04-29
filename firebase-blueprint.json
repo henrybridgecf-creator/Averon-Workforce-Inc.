@@ -1,0 +1,91 @@
+
+{
+  "entities": {
+    "UserProfile": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "User Profile",
+      "type": "object",
+      "description": "Represents a user of the AverPay platform with enhanced Crisp-style metadata.",
+      "properties": {
+        "uid": { "type": "string", "description": "The unique identifier for the user, matching their auth UID." },
+        "fullName": { "type": "string", "description": "The full name of the user." },
+        "email": { "type": "string", "description": "The email address of the user.", "format": "email" },
+        "personalEmail": { "type": "string", "description": "The personal email for account recovery.", "format": "email" },
+        "phone": { "type": "string", "description": "The user's phone number." },
+        "profilePhoto": { "type": "string", "description": "URL of the user's profile photo.", "format": "uri" },
+        "verificationIdUrl": { "type": "string", "description": "URL of the user's verification ID document.", "format": "uri" },
+        "proofOfAddressUrl": { "type": "string", "description": "URL of the user's proof of address document.", "format": "uri" },
+        "totalBalance": { "type": "number", "description": "The user's available funds." },
+        "pendingBalance": { "type": "number", "description": "The user's pending (uncleared) funds." },
+        "status": { "type": "string", "description": "The user's account status, e.g., 'active' or 'pending'." },
+        "averpayId": { "type": "string" },
+        "role": { "type": "string" },
+        "location": { "type": "string" },
+        "rank": { "type": "number" },
+        "browserInfo": { "type": "string", "description": "Detected browser and OS info (e.g., Chrome on Windows)." },
+        "lastSeen": { "type": "string", "format": "date-time" },
+        "bankDetails": {
+          "type": "object",
+          "properties": {
+            "bankName": { "type": "string" },
+            "accountHolder": { "type": "string" },
+            "accountNumber": { "type": "string" }
+          }
+        }
+      },
+      "required": ["uid", "fullName", "email", "totalBalance", "status"]
+    },
+    "Admin": {
+       "title": "Admin",
+       "description": "Represents an administrator of the platform.",
+       "type": "object",
+       "properties": {
+          "isAdmin": { "type": "boolean", "description": "A flag to confirm admin status." }
+       },
+       "required": ["isAdmin"]
+    },
+    "Message": {
+      "title": "Message",
+      "description": "Represents a single message in a chat thread.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "text": { "type": "string" },
+        "senderId": { "type": "string" },
+        "timestamp": { "type": "string", "format": "date-time" },
+        "senderName": { "type": "string" },
+        "senderImage": { "type": "string", "format": "uri" }
+      },
+      "required": ["id", "text", "senderId", "timestamp"]
+    }
+  },
+  "auth": {
+    "providers": [
+      "password"
+    ]
+  },
+  "firestore": {
+    "structure": [
+      {
+        "path": "/users/{userId}",
+        "definition": {
+          "entityName": "UserProfile",
+          "schema": {
+            "$ref": "#/entities/UserProfile"
+          },
+          "description": "Stores user profiles and session metadata."
+        }
+      },
+      {
+        "path": "/chats/{chatId}/messages/{messageId}",
+        "definition": {
+          "entityName": "Message",
+          "schema": {
+            "$ref": "#/entities/Message"
+          },
+          "description": "Stores messages for a specific chat conversation."
+        }
+      }
+    ]
+  }
+}

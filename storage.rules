@@ -1,0 +1,24 @@
+rules_version = '2';
+
+service firebase.storage {
+  match /b/{bucket}/o {
+  
+    // Helper function to check if the requesting user is an admin.
+    function isAdmin() {
+      return exists(/databases/(default)/documents/admins/$(request.auth.uid));
+    }
+    
+    // Only authenticated users can upload.
+    // The path must match the user's UID and the project ID they are submitting for.
+    match /submissions/{userId}/{projectId}/{fileName} {
+      allow read: if isAdmin() || request.auth.uid == userId;
+      allow write: if request.auth.uid == userId;
+    }
+    
+    // Public user assets like profile pictures
+    match /user-assets/{userId}/{fileName} {
+      allow read;
+      allow write: if request.auth.uid == userId;
+    }
+  }
+}
