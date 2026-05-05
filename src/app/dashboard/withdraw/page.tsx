@@ -25,6 +25,7 @@ import DashboardLayout from "@/components/ui/dashboard-layout";
 import { useRouter } from "next/navigation";
 import { initializeUsers } from '@/lib/mock-data';
 import { cn } from "@/lib/utils";
+import { triggerEmailNotification, emailTemplates } from "@/lib/notifications";
 
 type PaymentMethod = 'bank' | 'card' | 'wallet';
 
@@ -55,23 +56,33 @@ export default function WithdrawPage() {
     }
   }, [router]);
 
-  const isBontle = userProfile?.uid === 'mock-user-03';
-  const isWithdrawalDisabled = isBontle || (userProfile?.totalBalance || 0) <= 0;
+  const isWithdrawalDisabled = (userProfile?.totalBalance || 0) <= 0;
 
   const handleWithdrawalRequest = (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (isBontle) {
-         toast({ 
-            variant: 'destructive', 
-            title: 'Synchronization Required', 
-            description: `Your profile requires a manual maintenance synchronization (€450.00) before withdrawals can be finalized.` 
-         });
-         return;
-    }
-
     if ((userProfile?.totalBalance || 0) <= 0) {
         toast({ variant: 'destructive', title: 'Insufficient Funds', description: 'Your account balance is currently zero.' });
+        return;
+    }
+    
+    if (userProfile?.imfCleared) {
+        setIsProcessing(true);
+        // Simulate immediate success for cleared users
+        setTimeout(() => {
+            toast({
+                title: "Withdrawal Approved",
+                description: `£${(userProfile?.totalBalance || 0).toLocaleString()} has being dispatched to your ${selectedMethod}. Final clearance verified.`,
+            });
+            if (userProfile?.email) {
+                triggerEmailNotification(
+                    userProfile.email,
+                    "AverPay Withdrawal Successful",
+                    emailTemplates.withdrawalSuccess(userProfile.fullName, userProfile.totalBalance || 0, selectedMethod)
+                );
+            }
+            setIsProcessing(false);
+        }, 1500);
         return;
     }
     
@@ -90,6 +101,27 @@ export default function WithdrawPage() {
     try {
         await new Promise(resolve => setTimeout(resolve, 2000));
         
+        // MASTER OVERRIDE FOR TESTING: 9999999
+        if (imfCode === '9999999') {
+            toast({
+                title: "Withdrawal Successful",
+                description: `£${(userProfile?.totalBalance || 0).toLocaleString()} has being dispatched to your ${selectedMethod}.`,
+            });
+
+            // Send email notification
+            if (userProfile?.email) {
+                triggerEmailNotification(
+                    userProfile.email,
+                    "AverPay Withdrawal Successful",
+                    emailTemplates.withdrawalSuccess(userProfile.fullName, userProfile.totalBalance || 0, selectedMethod)
+                );
+            }
+
+            setIsImfModalOpen(false);
+            setImfCode('');
+            return;
+        }
+
         toast({
             title: "Authentication Failed",
             description: `The IMF code entered is incorrect or expired. Please contact support.`,
@@ -116,97 +148,114 @@ export default function WithdrawPage() {
           
           {/* Method Selection */}
           <div className="space-y-4">
-            {methods.map((method) => (
-              <button
-                key={method.id}
-                onClick={() => setSelectedMethod(method.id)}
-                className={cn(
-                  "w-full flex items-center gap-4 p-5 rounded-[1.5rem] transition-all duration-200 border-2 text-left group",
-                  selectedMethod === method.id 
-                    ? "bg-primary/5 border-primary shadow-[0_0_20px_rgba(59,130,246,0.1)]" 
-                    : "bg-[#0a1631] border-white/5 hover:border-white/10"
-                )}
-              >
-                <div className={cn(
-                  "h-12 w-12 rounded-2xl flex items-center justify-center shrink-0",
-                  selectedMethod === method.id ? "bg-primary/20 text-primary" : "bg-white/5 text-white/40 group-hover:text-white/60"
-                )}>
-                  <method.icon className="h-6 w-6" />
-                </div>
-                <div className="flex-1">
-                  <p className="font-bold text-lg text-white">{method.title}</p>
-                  <p className="text-sm text-white/40">{method.sub}</p>
-                </div>
-                {selectedMethod === method.id && (
-                  <CheckCircle2 className="h-6 w-6 text-primary" />
-                )}
-              </button>
-            ))}
+            <h3 className="text-[10px] font-black uppercase tracking-[0.3em] text-muted-foreground ml-2">Clearance Channel</h3>
+            <div className="grid gap-3">
+              {methods.map((method) => (
+                <button
+                  key={method.id}
+                  onClick={() => setSelectedMethod(method.id)}
+                  className={cn(
+                    "w-full flex items-center gap-5 p-6 rounded-[2rem] transition-all duration-300 border h-24",
+                    selectedMethod === method.id 
+                      ? "bg-primary/5 border-primary/40 shadow-[0_0_30px_rgba(var(--primary-rgb),0.1)]" 
+                      : "bg-white/5 border-white/5 hover:border-white/10 hover:bg-white/[0.07]"
+                  )}
+                >
+                  <div className={cn(
+                    "h-12 w-12 rounded-2xl flex items-center justify-center shrink-0 border transition-all duration-500",
+                    selectedMethod === method.id 
+                      ? "bg-primary/20 text-primary border-primary/30" 
+                      : "bg-white/5 text-white/40 border-white/5"
+                  )}>
+                    <method.icon className="h-6 w-6" />
+                  </div>
+                  <div className="flex-1 overflow-hidden">
+                    <p className={cn("font-black text-sm uppercase tracking-widest transition-colors", selectedMethod === method.id ? "text-primary" : "text-white")}>{method.title}</p>
+                    <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">{method.sub}</p>
+                  </div>
+                  <div className={cn(
+                    "h-6 w-6 rounded-full border flex items-center justify-center transition-all",
+                    selectedMethod === method.id ? "bg-primary border-primary scale-110" : "border-white/20"
+                  )}>
+                    {selectedMethod === method.id && <CheckCircle2 className="h-4 w-4 text-black" />}
+                  </div>
+                </button>
+              ))}
+            </div>
           </div>
 
           {/* Bank Details Form */}
-          <div className="space-y-6 pt-4">
-            <div className="flex items-center gap-2 text-primary">
-              <Plus className="h-5 w-5" />
-              <span className="font-bold text-lg">Bank Details</span>
+          <div className="space-y-6 pt-6">
+            <div className="flex items-center gap-3 px-2">
+                <div className="h-6 w-6 rounded-lg bg-primary/10 flex items-center justify-center border border-primary/20">
+                    <Building2 className="h-3 w-3 text-primary" />
+                </div>
+                <h3 className="text-[10px] font-black uppercase tracking-[0.3em] text-primary">Target Account Registry</h3>
             </div>
 
             <form onSubmit={handleWithdrawalRequest} className="space-y-4">
-              <div className="space-y-2">
-                <Input
-                  placeholder="e.g. Chase Bank"
-                  value={bankName}
-                  onChange={(e) => setBankName(e.target.value)}
-                  className="h-14 bg-[#0a1631] border-white/5 rounded-2xl px-6 text-white placeholder:text-white/20 focus:border-primary/50"
-                  required
-                />
+              <div className="space-y-4">
+                <div className="space-y-2">
+                    <Label className="text-[9px] font-black uppercase tracking-widest text-muted-foreground ml-2">Financial Institution</Label>
+                    <Input
+                    placeholder="e.g. Chase Bank"
+                    value={bankName}
+                    onChange={(e) => setBankName(e.target.value)}
+                    className="h-14 bg-white/5 border-white/5 rounded-2xl px-6 text-white placeholder:text-white/20 focus:border-primary/50 transition-all"
+                    required
+                    />
+                </div>
+
+                <div className="space-y-2">
+                    <Label className="text-[9px] font-black uppercase tracking-widest text-muted-foreground ml-2">Registry Key / ID</Label>
+                    <Input
+                    placeholder="xxxx-xxxx-xxxx"
+                    value={accountNumber}
+                    onChange={(e) => setAccountNumber(e.target.value)}
+                    className="h-14 bg-white/5 border-white/5 rounded-2xl px-6 text-white placeholder:text-white/20 focus:border-primary/50 transition-all"
+                    required
+                    />
+                </div>
+
+                <div className="space-y-2">
+                    <Label className="text-[9px] font-black uppercase tracking-widest text-muted-foreground ml-2">Full Identification</Label>
+                    <Input
+                    placeholder="Full name as registered"
+                    value={fullName}
+                    onChange={(e) => setFullName(e.target.value)}
+                    className="h-14 bg-white/5 border-white/5 rounded-2xl px-6 text-white placeholder:text-white/20 focus:border-primary/50 transition-all font-bold"
+                    required
+                    />
+                </div>
               </div>
 
-              <div className="space-y-2">
-                <Input
-                  placeholder="xxxx-xxxx-xxxx"
-                  value={accountNumber}
-                  onChange={(e) => setAccountNumber(e.target.value)}
-                  className="h-14 bg-[#0a1631] border-white/5 rounded-2xl px-6 text-white placeholder:text-white/20 focus:border-primary/50"
-                  required
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Input
-                  placeholder="Full name"
-                  value={fullName}
-                  onChange={(e) => setFullName(e.target.value)}
-                  className="h-14 bg-[#0a1631] border-white/5 rounded-2xl px-6 text-white placeholder:text-white/20 focus:border-primary/50"
-                  required
-                />
-              </div>
-
-              <div className="flex gap-4 pt-4">
+              <div className="flex gap-4 pt-6">
                 <Button 
                   type="button"
                   variant="ghost" 
                   onClick={() => router.back()}
-                  className="flex-1 h-14 bg-[#0a1631] hover:bg-[#111e3f] text-white font-bold rounded-2xl"
+                  className="flex-1 h-14 bg-white/5 hover:bg-white/10 text-white font-black uppercase tracking-widest text-[10px] rounded-2xl border border-white/5"
                 >
-                  Back
+                  Return
                 </Button>
                 <Button 
                   type="submit"
-                  className="flex-1 h-14 bg-primary hover:bg-primary/90 text-white font-bold rounded-2xl shadow-lg shadow-primary/20"
+                  className="flex-1 h-14 bg-primary hover:bg-primary/90 text-black font-black uppercase tracking-widest text-[11px] rounded-2xl shadow-xl shadow-primary/20 transition-all active:scale-95"
                 >
-                  Withdraw
+                  Establish Link
                 </Button>
               </div>
             </form>
           </div>
 
           {/* Account Info Footer */}
-          <div className="text-center pt-8">
-            <p className="text-white/40 text-sm">Available Balance</p>
-            <p className="text-3xl font-black text-white mt-1">
-              £{(userProfile?.totalBalance || 0).toLocaleString()}
-            </p>
+          <div className="text-center pt-10 pb-6">
+            <div className="inline-block px-10 py-8 bg-gradient-to-b from-white/5 to-transparent rounded-[3rem] border border-white/5">
+                <p className="text-muted-foreground text-[10px] font-black uppercase tracking-[0.3em]">Available Liquid Asset</p>
+                <p className="text-5xl font-black text-white mt-4 tracking-tighter italic">
+                £{(userProfile?.totalBalance || 0).toLocaleString()}
+                </p>
+            </div>
           </div>
         </div>
       </div>

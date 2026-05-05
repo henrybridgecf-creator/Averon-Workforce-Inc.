@@ -4,7 +4,7 @@ import React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { Button } from '@/components/ui/button';
-import { Users, Folder, Settings, LogOut, Wallet, MessageSquare } from 'lucide-react';
+import { Users, Folder, Settings, LogOut, Wallet, MessageSquare, LayoutDashboard } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useRouter } from 'next/navigation';
 
@@ -19,6 +19,7 @@ export function AdminSidebar({ isSheetContent = false }: { isSheetContent?: bool
   };
 
   const navItems = [
+      { href: '/dashboard', label: 'Back to Dashboard', icon: LayoutDashboard },
       { href: '/admin/users', label: 'Users', icon: Users },
       { href: '/admin/projects', label: 'Projects', icon: Folder },
       { href: '/admin/chat', label: 'Chat', icon: MessageSquare },

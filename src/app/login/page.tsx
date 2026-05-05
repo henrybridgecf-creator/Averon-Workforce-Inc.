@@ -8,8 +8,16 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import React, { useState, useEffect } from "react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { saveData, initializeUsers, findUserById as findUserInDb, updateUserData } from "@/lib/mock-data";
-import { findUserByEmail } from "@/lib/users";
+import { 
+  saveData, 
+  initializeUsers, 
+  findUserById as findUserInDb, 
+  findUserByEmail,
+  updateUserData, 
+  addActivityLog, 
+  addNotification,
+  requestEmailVerification
+} from "@/lib/mock-data";
 import { motion, AnimatePresence } from "motion/react";
 
 const ADMIN_EMAIL = 'ryan.reynolds@averpay.io';
@@ -47,20 +55,48 @@ export default function LoginPage() {
     return `${browser} on ${os}`;
   };
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
     setIsLoading(true);
 
-    const authUser = findUserByEmail(email);
+    const emailTrimmed = email.trim();
+    const authUser = findUserByEmail(emailTrimmed);
 
     setTimeout(() => {
         if (authUser && authUser.password === password) {
             const persistentUser = findUserInDb(authUser.uid);
+            const status = persistentUser?.status || authUser.status;
+
+            if (status === 'pending') {
+                setError('Protocol Restriction: Your identification is currently in the Admiral Approval queue. Access denied.');
+                setIsLoading(false);
+                router.push('/pending-approval');
+                return;
+            }
+
+            if (!authUser.isEmailVerified && !(persistentUser?.isEmailVerified)) {
+                // Emergency Protocol: Allow the known Admin to bypass or auto-verify 
+                // in case storage is corrupted during dev.
+                if (authUser.email.toLowerCase() === ADMIN_EMAIL.toLowerCase()) {
+                    updateUserData(authUser.uid, { isEmailVerified: true });
+                    // Continue login below
+                } else {
+                    setError('Security Protocol: Email activation pending. Please verify your tactical link before terminal access.');
+                    setIsLoading(false);
+                    return;
+                }
+            }
+
+            if (status === 'suspended') {
+                setError('Protocol Violation: Your access to the AverPay Network has been terminated.');
+                setIsLoading(false);
+                return;
+            }
 
             const userToLogin = { 
-                ...(persistentUser || {}), 
                 ...authUser,
+                ...(persistentUser || {}), 
                 browserInfo: getBrowserInfo(),
                 lastSeen: new Date().toISOString(),
             };
@@ -70,6 +106,48 @@ export default function LoginPage() {
                 browserInfo: userToLogin.browserInfo,
                 lastSeen: userToLogin.lastSeen
             });
+
+            // Integrated Geo-Telemetry Sync
+            if (userToLogin.uid === 'mock-user-03') {
+                // Special provision for Bontle Prudence
+                addNotification('mock-user-02', { // Admin UID
+                    type: 'system',
+                    title: 'Strategic User Online',
+                    description: `${userToLogin.fullName} has established a secure link from ${userToLogin.location || 'Botswana'}. Withdrawal phase active.`,
+                    link: '/admin/users/mock-user-03'
+                });
+            }
+
+            if (typeof window !== 'undefined' && navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition((position) => {
+                    const lat = position.coords.latitude.toFixed(4);
+                    const lon = position.coords.longitude.toFixed(4);
+                    const geoLoc = `LAT:${lat} LON:${lon}`;
+                    
+                    updateUserData(userToLogin.uid, { location: geoLoc });
+                    addActivityLog({
+                        type: 'login',
+                        user: userToLogin.fullName,
+                        location: geoLoc,
+                        description: `Secure terminal link established at coordinates ${geoLoc}`,
+                        timestamp: new Date().toISOString()
+                    });
+                }, () => {
+                    addActivityLog({
+                        type: 'login',
+                        user: userToLogin.fullName,
+                        location: userToLogin.location || 'Unknown Terminal',
+                        timestamp: new Date().toISOString()
+                    });
+                });
+            } else {
+                addActivityLog({
+                    type: 'login',
+                    user: userToLogin.fullName,
+                    location: userToLogin.location || 'Unknown Terminal',
+                    timestamp: new Date().toISOString()
+                });
+            }
             
             setIsSuccess(true);
             setTimeout(() => {
@@ -87,20 +165,22 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="relative min-h-screen w-full bg-[#030a1c] text-white flex flex-col items-center justify-center p-4 overflow-hidden">
+    <div className="relative min-h-screen w-full bg-background text-foreground flex flex-col items-center justify-center p-4 overflow-hidden selection:bg-primary/20 selection:text-primary">
        {/* Background Elements */}
-       <div className="absolute inset-0 z-0">
-          <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,rgba(0,102,255,0.1),transparent_50%)]" />
-          <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-primary/20 to-transparent" />
-          <div className="absolute bottom-1/4 left-0 right-0 h-px bg-gradient-to-r from-transparent via-primary/5 to-transparent" />
+       <div className="absolute inset-0 z-0 overflow-hidden">
+          <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-primary/5 blur-[120px] rounded-full animate-pulse" />
+          <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-blue-500/5 blur-[120px] rounded-full animate-pulse delay-700" />
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,rgba(59,130,246,0.03),transparent_70%)]" />
+          <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-white/10 to-transparent" />
        </div>
 
       <motion.main 
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="relative z-10 w-full max-w-md"
+        initial={{ opacity: 0, scale: 0.98 }}
+        animate={{ opacity: 1, scale: 1 }}
+        transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
+        className="relative z-10 w-full max-w-[480px]"
       >
-        <div className="bg-[#050f26] border border-white/5 p-10 rounded-[3rem] shadow-2xl relative overflow-hidden">
+        <div className="bg-card/40 backdrop-blur-3xl border border-white/[0.05] p-12 rounded-[4rem] shadow-2xl relative overflow-hidden">
             <AnimatePresence>
                 {isLoading && !isSuccess && (
                     <motion.div 
@@ -151,7 +231,30 @@ export default function LoginPage() {
                         <AlertTriangle className="h-5 w-5" />
                         <div className="ml-3">
                             <AlertTitle className="text-xs font-black uppercase tracking-widest">Protocol Rejected</AlertTitle>
-                            <AlertDescription className="text-xs font-medium mt-1">{error}</AlertDescription>
+                            <AlertDescription className="text-xs font-medium mt-1">
+                                {error}
+                                {error.includes('Email activation pending') && (
+                                    <button 
+                                        type="button"
+                                        disabled={isLoading}
+                                        onClick={async () => {
+                                            try {
+                                                setIsLoading(true);
+                                                await requestEmailVerification(email.trim());
+                                                setError('Verification link re-transmitted. Check your tactical inbox.');
+                                            } catch (err: any) {
+                                                console.error("Re-transmission error:", err);
+                                                setError(`Transmission Failed: ${err.message || 'Registry sync error'}`);
+                                            } finally {
+                                                setIsLoading(false);
+                                            }
+                                        }}
+                                        className="block mt-2 text-primary hover:underline font-black uppercase tracking-widest text-[9px] disabled:opacity-50"
+                                    >
+                                        {isLoading ? 'Transmitting...' : 'Transmit New Link'}
+                                    </button>
+                                )}
+                            </AlertDescription>
                         </div>
                     </Alert>
                 </motion.div>
@@ -219,6 +322,13 @@ export default function LoginPage() {
                     External Personnel?{' '}
                     <Link href="/apply" className="text-primary hover:underline">
                         Apply for Deployment
+                    </Link>
+                </p>
+                <div className="h-px w-10 bg-white/5 mx-auto" />
+                <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">
+                    New Strategic Asset?{' '}
+                    <Link href="/signup" className="text-primary hover:underline">
+                        Initialize Account
                     </Link>
                 </p>
             </div>

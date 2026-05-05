@@ -67,7 +67,10 @@ export default function HomePage() {
              <Link href="/login" className="hidden md:block text-sm font-medium text-muted-foreground hover:text-white transition-colors">
                 Sign In
              </Link>
-             <Link href="/apply">
+             <Link href="/signup" className="hidden md:block text-sm font-medium text-muted-foreground hover:text-white transition-colors">
+                Sign Up
+             </Link>
+             <Link href="/signup">
                 <Button variant="outline" className="border-primary/20 hover:bg-primary/10">Apply Now</Button>
              </Link>
           </nav>
@@ -158,7 +161,7 @@ export default function HomePage() {
                         Become part of the most secure and reliable freelance management ecosystem. Access premium projects and track your global earnings with ease.
                     </p>
                     <div className="mt-12">
-                        <Link href="/apply">
+                        <Link href="/signup">
                             <Button size="lg" className="h-16 px-12 text-xl font-black shadow-2xl shadow-primary/20">
                                 START YOUR APPLICATION
                             </Button>

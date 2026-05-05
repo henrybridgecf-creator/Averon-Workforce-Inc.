@@ -1,12 +1,13 @@
 'use client';
 import React, { useState, useEffect, useRef, Suspense, useMemo } from 'react';
+import { motion, AnimatePresence } from 'motion/react';
 import { useSearchParams } from 'next/navigation';
 import { usersData, initializeUsers, saveData, addNotification, findUserById } from '@/lib/mock-data';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Send, User as UserIcon, Monitor, Globe, Clock, ShieldCheck, Mail, Phone } from 'lucide-react';
+import { Send, User as UserIcon, Monitor, Globe, Clock, ShieldCheck, Mail, Phone, Search, Check, CheckCheck, Lock, CheckCircle2, Zap } from 'lucide-react';
 import { cn, getInitials } from '@/lib/utils';
 import { formatDistanceToNow } from 'date-fns';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -20,16 +21,20 @@ function AdminChatComponent() {
     const [adminProfile, setAdminProfile] = useState<any>(null);
 
     const [allUsers, setAllUsers] = useState<any[]>([]);
+    const [chatSearchQuery, setChatSearchQuery] = useState('');
     const [activeChatUserId, setActiveChatUserId] = useState<string | null>(targetUserId);
     const [newMessage, setNewMessage] = useState('');
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const [isSending, setIsSending] = useState(false);
+    const [searchTerm, setSearchTerm] = useState('');
     const [messages, setMessages] = useState<any[]>([]);
     const [isLoadingMessages, setIsLoadingMessages] = useState(false);
+    const [isUserTyping, setIsUserTyping] = useState(false);
+    const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
     useEffect(() => {
-        initializeUsers();
-        setAllUsers(usersData.filter(u => u.uid !== ADMIN_UID));
+        initializeUsers(true);
+        setAllUsers(usersData.filter(u => u && u.uid && u.uid !== ADMIN_UID));
         const adminData = findUserById(ADMIN_UID);
         setAdminProfile(adminData);
     }, []);
@@ -40,27 +45,102 @@ function AdminChatComponent() {
         }
     }, [targetUserId]);
 
+    const filteredUsers = useMemo(() => {
+        return allUsers.filter(u => 
+            (u?.fullName || '').toLowerCase().includes(chatSearchQuery.toLowerCase()) || 
+            (u?.averpayId || '').toLowerCase().includes(chatSearchQuery.toLowerCase())
+        );
+    }, [allUsers, chatSearchQuery]);
+
     const activeUser = allUsers.find(u => u.uid === activeChatUserId);
     const chatId = useMemo(() => {
         if (!activeChatUserId || !adminProfile) return null;
         return [activeChatUserId, adminProfile.uid].sort().join('_');
     }, [activeChatUserId, adminProfile]);
 
+    // Handle typing state
+    const handleTyping = () => {
+        if (!chatId) return;
+        try {
+            const typingData = JSON.parse(localStorage.getItem('typingStates') || '{}');
+            typingData[chatId] = { ...typingData[chatId], [ADMIN_UID]: true };
+            localStorage.setItem('typingStates', JSON.stringify(typingData));
+
+            if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+            typingTimeoutRef.current = setTimeout(() => {
+                try {
+                    const currentTyping = JSON.parse(localStorage.getItem('typingStates') || '{}');
+                    if (currentTyping[chatId]) {
+                        currentTyping[chatId] = { ...currentTyping[chatId], [ADMIN_UID]: false };
+                        localStorage.setItem('typingStates', JSON.stringify(currentTyping));
+                    }
+                } catch (e) {
+                    console.error("Failed to update typing state", e);
+                }
+            }, 3000);
+        } catch (e) {
+            console.error("Failed to access typing states", e);
+        }
+    };
+
     useEffect(() => {
         if (chatId) {
             setIsLoadingMessages(true);
-            const loadMessages = () => {
-                const storedMessages = JSON.parse(localStorage.getItem('mockMessages') || '{}');
-                setMessages(storedMessages[chatId] || []);
+            const loadData = () => {
+                try {
+                    // Messages
+                    const storedMessages = JSON.parse(localStorage.getItem('mockMessages') || '{}');
+                    const chatMessages = storedMessages[chatId] || [];
+                    
+                    // Mark incoming as read
+                    let hasChanges = false;
+                    const updatedChatMessages = chatMessages.map((m: any) => {
+                        if (m.senderId !== ADMIN_UID && m.status !== 'read') {
+                            hasChanges = true;
+                            return { ...m, status: 'read' };
+                        }
+                        return m;
+                    });
+                    
+                    if (hasChanges) {
+                        storedMessages[chatId] = updatedChatMessages;
+                        saveData('mockMessages', storedMessages);
+                    }
+                    
+                    setMessages(updatedChatMessages);
+
+                    // Typing state
+                    const typingData = JSON.parse(localStorage.getItem('typingStates') || '{}');
+                    const chatTyping = typingData[chatId] || {};
+                    setIsUserTyping(chatTyping[activeChatUserId!] === true);
+                } catch (e) {
+                    console.error("Chat data sync error", e);
+                }
             };
 
-            loadMessages();
+            loadData();
             setIsLoadingMessages(false);
 
-            const intervalId = setInterval(loadMessages, 2000);
-            return () => clearInterval(intervalId);
+            // Sync across tabs
+            const handleStorageChange = (e: StorageEvent) => {
+                if (e.key === 'mockMessages' || e.key === 'typingStates') {
+                    loadData();
+                }
+            };
+            window.addEventListener('storage', handleStorageChange);
+            
+            const intervalId = setInterval(loadData, 2000);
+            return () => {
+                window.removeEventListener('storage', handleStorageChange);
+                clearInterval(intervalId);
+            };
         }
-    }, [chatId]);
+    }, [chatId, activeChatUserId]);
+
+    const filteredMessages = useMemo(() => {
+        if (!searchTerm.trim()) return messages;
+        return messages.filter(m => m.text.toLowerCase().includes(searchTerm.toLowerCase()));
+    }, [messages, searchTerm]);
 
     const handleSendMessage = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -68,32 +148,47 @@ function AdminChatComponent() {
 
         setIsSending(true);
 
-        const messageData = {
-            id: `msg-${Date.now()}`,
-            text: newMessage,
-            senderId: adminProfile.uid,
-            timestamp: new Date().toISOString(),
-            senderName: adminProfile.fullName,
-            senderImage: adminProfile.profilePhoto,
-        };
-        
-        const allMessages = JSON.parse(localStorage.getItem('mockMessages') || '{}');
-        const currentMessages = allMessages[chatId] || [];
-        const updatedMessages = [...currentMessages, messageData];
-        allMessages[chatId] = updatedMessages;
-        saveData('mockMessages', allMessages); 
+        try {
+            const allMessages = JSON.parse(localStorage.getItem('mockMessages') || '{}');
+            const currentMessages = allMessages[chatId] || [];
+            
+            const messageData = {
+                id: `msg-${Date.now()}`,
+                text: newMessage,
+                senderId: adminProfile.uid,
+                timestamp: new Date().toISOString(),
+                senderName: adminProfile.fullName,
+                senderImage: adminProfile.profilePhoto,
+                status: 'sent',
+            };
+            
+            const updatedMessages = [...currentMessages, messageData];
+            allMessages[chatId] = updatedMessages;
+            saveData('mockMessages', allMessages); 
 
-        setMessages(updatedMessages);
-        
-        addNotification(activeChatUserId, {
-            type: 'new-message',
-            title: 'New message from Admin Support',
-            description: `"${newMessage.slice(0, 50)}${newMessage.length > 50 ? '...' : ''}"`,
-            link: '/dashboard/chat'
-        });
+            // Clear typing status on send
+            try {
+                const typingData = JSON.parse(localStorage.getItem('typingStates') || '{}');
+                typingData[chatId] = { ...typingData[chatId], [ADMIN_UID]: false };
+                localStorage.setItem('typingStates', JSON.stringify(typingData));
+            } catch (e) { /* ignore typing state error on send */ }
 
-        setNewMessage('');
-        setIsSending(false);
+            setMessages(updatedMessages);
+            
+            addNotification(activeChatUserId, {
+                type: 'new-message',
+                title: 'New message from Admin Support',
+                description: `"${newMessage.slice(0, 50)}${newMessage.length > 50 ? '...' : ''}"`,
+                link: '/dashboard/chat'
+            });
+
+            setNewMessage('');
+        } catch (e) {
+            console.error("Failed to send message", e);
+            toast({ variant: 'destructive', title: 'Transmission Error', description: 'Failed to synchronize message to terminal.' });
+        } finally {
+            setIsSending(false);
+        }
     };
 
     useEffect(() => {
@@ -127,10 +222,19 @@ function AdminChatComponent() {
                         <Badge variant="secondary" className="bg-primary/20 text-primary">{allUsers.length}</Badge>
                     </h2>
                     <p className="text-xs text-muted-foreground mt-1">Multi-channel support active</p>
+                    <div className="mt-4 relative group">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground group-focus-within:text-primary transition-colors" />
+                        <Input 
+                            placeholder="Filter nodes..." 
+                            value={chatSearchQuery}
+                            onChange={(e) => setChatSearchQuery(e.target.value)}
+                            className="h-10 pl-9 bg-white/5 border-white/5 rounded-xl text-xs text-white focus:border-primary/50" 
+                        />
+                    </div>
                 </div>
                 <ScrollArea className="h-[calc(100vh-10rem)]">
                     <div className="p-3 space-y-2">
-                        {allUsers.map(user => {
+                        {filteredUsers.map(user => {
                             const isActive = user.uid === activeChatUserId;
                             return (
                                 <button
@@ -146,7 +250,10 @@ function AdminChatComponent() {
                                             <AvatarImage src={user.profilePhoto} />
                                             <AvatarFallback>{getInitials(user.fullName)}</AvatarFallback>
                                         </Avatar>
-                                        <span className="absolute bottom-0 right-0 h-3 w-3 rounded-full bg-green-500 border-2 border-[#050f26] shadow-[0_0_8px_#22c55e]"></span>
+                                        <span className={cn(
+                                            "absolute bottom-0 right-0 h-3 w-3 rounded-full border-2 border-[#050f26]",
+                                            user.isOnline ? "bg-green-500 shadow-[0_0_8px_#22c55e]" : "bg-zinc-500"
+                                        )}></span>
                                     </div>
                                     <div className="flex-1 truncate">
                                         <div className="flex justify-between items-center mb-1">
@@ -178,49 +285,138 @@ function AdminChatComponent() {
                                     <p className="text-[10px] text-muted-foreground uppercase tracking-widest">{activeUser.role || 'Freelancer'}</p>
                                 </div>
                            </div>
+                           <div className="flex items-center gap-4 flex-1 max-w-xs mx-4">
+                                <div className="relative w-full group">
+                                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground group-focus-within:text-primary transition-colors" />
+                                    <Input 
+                                        placeholder="Search messages..." 
+                                        value={searchTerm}
+                                        onChange={(e) => setSearchTerm(e.target.value)}
+                                        className="h-9 pl-9 bg-white/5 border-white/5 rounded-xl text-[10px] text-white focus:border-primary/50" 
+                                    />
+                                </div>
+                           </div>
                            <div className="flex items-center gap-4">
-                               <div className="flex items-center gap-1.5 px-3 py-1 bg-green-500/10 rounded-full border border-green-500/20">
-                                    <div className="h-2 w-2 rounded-full bg-green-500 animate-pulse shadow-[0_0_5px_#22c55e]"></div>
-                                    <span className="text-[10px] font-bold text-green-500 uppercase tracking-widest">Live Session</span>
+                               <div className={cn(
+                                   "flex items-center gap-1.5 px-3 py-1 rounded-full border",
+                                   activeUser.isOnline ? "bg-green-500/10 border-green-500/20" : "bg-zinc-500/10 border-zinc-500/20"
+                               )}>
+                                    <div className={cn(
+                                        "h-2 w-2 rounded-full",
+                                        activeUser.isOnline ? "bg-green-500 animate-pulse shadow-[0_0_5px_#22c55e]" : "bg-zinc-500"
+                                    )}></div>
+                                    <span className={cn(
+                                        "text-[10px] font-bold uppercase tracking-widest",
+                                        activeUser.isOnline ? "text-green-500" : "text-zinc-500"
+                                    )}>{activeUser.isOnline ? "Live Session" : "Offline"}</span>
                                </div>
                            </div>
                         </div>
                         <ScrollArea className="flex-1 bg-[#030a1c]">
                              {isLoadingMessages ? <ChatSkeletons /> : (
                                 <div className="space-y-6 p-6">
-                                    {messages && messages.map(msg => {
-                                        const isAdminMessage = msg.senderId === ADMIN_UID;
-                                        const timestamp = new Date(msg.timestamp);
-                                        return (
-                                            <div key={msg.id} className={cn("flex items-end gap-3", isAdminMessage ? "justify-end" : "justify-start")}>
-                                                {!isAdminMessage && activeUser && (
-                                                    <Avatar className="h-8 w-8 shrink-0">
-                                                        <AvatarImage src={activeUser.profilePhoto} />
-                                                        <AvatarFallback>{getInitials(activeUser.fullName)}</AvatarFallback>
-                                                    </Avatar>
-                                                )}
-                                                <div className={cn(
-                                                    "max-w-xs md:max-w-md rounded-2xl p-4 shadow-sm",
-                                                    isAdminMessage 
-                                                        ? "bg-primary text-white rounded-br-none" 
-                                                        : "bg-white/10 text-white rounded-bl-none border border-white/5"
-                                                )}>
-                                                    <p className="text-sm leading-relaxed">{msg.text}</p>
-                                                    {timestamp && (
-                                                        <p className={cn("text-[10px] mt-2 font-bold uppercase tracking-wider", isAdminMessage ? "text-white/50" : "text-muted-foreground")}>
-                                                            {formatDistanceToNow(timestamp, { addSuffix: true })}
-                                                        </p>
-                                                    )}
+                                    <AnimatePresence mode="popLayout" initial={false}>
+                                        {filteredMessages && filteredMessages.map((msg, idx) => {
+                                            const isAdminMessage = msg.senderId === ADMIN_UID;
+                                            const timestamp = new Date(msg.timestamp);
+                                            const showAbsoluteTime = true; // Could be a setting
+                                            
+                                            return (
+                                                <motion.div 
+                                                    key={msg.id}
+                                                    initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                                                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                                                    transition={{ duration: 0.2, delay: idx % 5 * 0.05 }}
+                                                    layout
+                                                    className={cn("flex flex-col gap-1.5", isAdminMessage ? "items-end" : "items-start")}
+                                                >
+                                                    <div className={cn("flex items-end gap-3 max-w-[85%] md:max-w-[70%]", isAdminMessage ? "flex-row-reverse" : "flex-row")}>
+                                                        <Avatar className="h-9 w-9 shrink-0 border border-white/10 shadow-md ring-2 ring-white/5">
+                                                            <AvatarImage src={isAdminMessage ? adminProfile.profilePhoto : activeUser.profilePhoto} />
+                                                            <AvatarFallback className={cn("text-xs font-black", isAdminMessage ? "bg-primary text-white" : "bg-zinc-800 text-white")}>
+                                                                {getInitials(isAdminMessage ? adminProfile.fullName : activeUser.fullName)}
+                                                            </AvatarFallback>
+                                                        </Avatar>
+                                                        
+                                                        <div className="flex flex-col gap-1.5">
+                                                            <div className={cn(
+                                                                "relative px-5 py-3.5 rounded-2xl text-[14px] shadow-lg transition-all border",
+                                                                isAdminMessage 
+                                                                    ? "bg-gradient-to-br from-primary to-blue-600 text-white rounded-tr-none border-white/10" 
+                                                                    : "bg-[#0a1631] text-white/90 rounded-tl-none border-white/5"
+                                                            )}>
+                                                                <p className="leading-[1.6] tracking-tight whitespace-pre-wrap break-words font-medium">
+                                                                    {msg.text}
+                                                                </p>
+                                                            </div>
+                                                            
+                                                            <div className={cn("flex items-center gap-2 px-2", isAdminMessage ? "justify-end" : "justify-start")}>
+                                                                <span className="text-[10px] font-black text-white/40 uppercase tracking-widest flex items-center gap-2">
+                                                                    {showAbsoluteTime && (
+                                                                        <span className="text-white/20">
+                                                                            {timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                                                        </span>
+                                                                    )}
+                                                                    <span className="h-1 w-1 rounded-full bg-white/10" />
+                                                                    {formatDistanceToNow(timestamp, { addSuffix: true })}
+                                                                </span>
+                                                                {isAdminMessage && (
+                                                                    <div className="flex items-center gap-0.5 ml-1">
+                                                                        {msg.status === 'read' ? (
+                                                                            <CheckCheck className="h-3 w-3 text-blue-400" />
+                                                                        ) : (
+                                                                            <Check className="h-3 w-3 text-white/20" />
+                                                                        )}
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </motion.div>
+                                            );
+                                        })}
+                                    </AnimatePresence>
+                                    <AnimatePresence mode="popLayout">
+                                        {isUserTyping && activeUser && (
+                                            <motion.div 
+                                                initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                                                animate={{ opacity: 1, y: 0, scale: 1 }}
+                                                exit={{ opacity: 0, scale: 0.9 }}
+                                                className="flex items-end gap-3"
+                                            >
+                                                <Avatar className="h-9 w-9 shrink-0 border border-white/10 shadow-md ring-2 ring-white/5">
+                                                    <AvatarImage src={activeUser.profilePhoto} />
+                                                    <AvatarFallback className="bg-zinc-800 text-white text-[10px] font-black">
+                                                        {getInitials(activeUser.fullName)}
+                                                    </AvatarFallback>
+                                                </Avatar>
+                                                <div className="flex flex-col gap-1.5">
+                                                    <div className="bg-[#0a1631] px-5 py-3 rounded-2xl rounded-tl-none border border-white/5 flex items-center gap-3 shadow-xl">
+                                                        <div className="flex items-center gap-1.5">
+                                                            <motion.span 
+                                                                animate={{ opacity: [0.3, 1, 0.3] }} 
+                                                                transition={{ repeat: Infinity, duration: 1.4, delay: 0 }} 
+                                                                className="w-1.5 h-1.5 bg-primary rounded-full" 
+                                                            />
+                                                            <motion.span 
+                                                                animate={{ opacity: [0.3, 1, 0.3] }} 
+                                                                transition={{ repeat: Infinity, duration: 1.4, delay: 0.2 }} 
+                                                                className="w-1.5 h-1.5 bg-primary/60 rounded-full" 
+                                                            />
+                                                            <motion.span 
+                                                                animate={{ opacity: [0.3, 1, 0.3] }} 
+                                                                transition={{ repeat: Infinity, duration: 1.4, delay: 0.4 }} 
+                                                                className="w-1.5 h-1.5 bg-primary/30 rounded-full" 
+                                                            />
+                                                        </div>
+                                                        <span className="text-[10px] font-black text-primary uppercase tracking-[0.1em]">
+                                                            {activeUser.fullName?.split(' ')[0] || 'User'} is composing...
+                                                        </span>
+                                                    </div>
                                                 </div>
-                                                {isAdminMessage && adminProfile && (
-                                                    <Avatar className="h-8 w-8 shrink-0">
-                                                        <AvatarImage src={adminProfile.profilePhoto} />
-                                                        <AvatarFallback>AD</AvatarFallback>
-                                                    </Avatar>
-                                                )}
-                                            </div>
-                                        );
-                                    })}
+                                            </motion.div>
+                                        )}
+                                    </AnimatePresence>
                                      <div ref={messagesEndRef} />
                                 </div>
                              )}
@@ -229,7 +425,10 @@ function AdminChatComponent() {
                             <form onSubmit={handleSendMessage} className="flex items-center gap-3">
                                 <Input
                                     value={newMessage}
-                                    onChange={e => setNewMessage(e.target.value)}
+                                    onChange={e => {
+                                        setNewMessage(e.target.value);
+                                        handleTyping();
+                                    }}
                                     placeholder="Type a message to the user..."
                                     className="h-14 bg-white/5 border-white/5 rounded-2xl px-6 text-white focus:border-primary/50"
                                 />
@@ -251,66 +450,106 @@ function AdminChatComponent() {
             </div>
 
             {/* Session Metadata Sidebar */}
-            <div className="border-l border-white/5 bg-[#050f26] p-6 hidden lg:block overflow-y-auto">
+            <div className="border-l border-white/5 bg-[#050f26] hidden lg:flex flex-col h-full overflow-hidden">
                 {activeUser ? (
-                    <div className="space-y-8">
-                        <div>
-                            <h3 className="text-[10px] font-black text-muted-foreground uppercase tracking-[0.2em] mb-4">Live Session Metadata</h3>
-                            <div className="space-y-4">
-                                <div className="flex items-center gap-3 p-3 bg-white/5 rounded-xl border border-white/5">
-                                    <Monitor className="h-4 w-4 text-primary" />
-                                    <div>
-                                        <p className="text-[10px] text-muted-foreground uppercase font-bold">Device & Browser</p>
-                                        <p className="text-sm font-semibold text-white truncate max-w-[180px]">{activeUser.browserInfo || 'Detecting...'}</p>
-                                    </div>
-                                </div>
-                                <div className="flex items-center gap-3 p-3 bg-white/5 rounded-xl border border-white/5">
-                                    <Globe className="h-4 w-4 text-green-500" />
-                                    <div>
-                                        <p className="text-[10px] text-muted-foreground uppercase font-bold">Real-Time Location</p>
-                                        <p className="text-sm font-semibold text-white">{activeUser.location}</p>
-                                    </div>
-                                </div>
-                                <div className="flex items-center gap-3 p-3 bg-white/5 rounded-xl border border-white/5">
-                                    <Clock className="h-4 w-4 text-yellow-500" />
-                                    <div>
-                                        <p className="text-[10px] text-muted-foreground uppercase font-bold">Last Activity</p>
-                                        <p className="text-sm font-semibold text-white">
-                                            {activeUser.lastSeen ? formatDistanceToNow(new Date(activeUser.lastSeen), { addSuffix: true }) : 'Online Now'}
-                                        </p>
-                                    </div>
-                                </div>
-                            </div>
+                    <div className="flex flex-col h-full">
+                        <div className="p-6 border-b border-white/5 bg-white/[0.02]">
+                            <p className="text-[10px] font-black text-primary uppercase tracking-[0.3em] mb-1">Terminal Node</p>
+                            <h3 className="text-xl font-bold text-white italic tracking-tighter">SESSION<span className="text-primary">INTEL</span></h3>
                         </div>
 
-                        <div>
-                            <h3 className="text-[10px] font-black text-muted-foreground uppercase tracking-[0.2em] mb-4">Account Integrity</h3>
-                            <div className="space-y-3">
-                                <div className="flex justify-between items-center py-2 border-b border-white/5 text-white">
-                                    <span className="text-[11px] text-muted-foreground font-bold flex items-center gap-2"><ShieldCheck className="h-3 w-3" /> Status</span>
-                                    <Badge variant="secondary" className="text-[10px] uppercase bg-green-500/20 text-green-500">{activeUser.status}</Badge>
+                        <ScrollArea className="flex-1">
+                            <div className="p-6 space-y-8">
+                                {/* Live Session Metadata */}
+                                <div>
+                                    <h4 className="text-[10px] font-black text-muted-foreground uppercase tracking-[0.2em] mb-4 flex items-center gap-2">
+                                        <Monitor className="h-3 w-3" /> Live Metadata
+                                    </h4>
+                                    <div className="grid gap-3">
+                                        <div className="p-4 bg-white/5 rounded-2xl border border-white/5 group hover:border-primary/20 transition-all">
+                                            <p className="text-[9px] text-muted-foreground uppercase font-black tracking-widest mb-1 opacity-50">Browser Environment</p>
+                                            <p className="text-xs font-bold text-white truncate">{activeUser.browserInfo || 'Averon Secure Browser v4.2'}</p>
+                                        </div>
+                                        <div className="p-4 bg-white/5 rounded-2xl border border-white/10 group hover:border-green-500/20 transition-all">
+                                            <p className="text-[9px] text-muted-foreground uppercase font-black tracking-widest mb-1 opacity-50">Network Relay (IP)</p>
+                                            <p className="text-xs font-bold text-white font-mono">192.168.1.{Math.floor(Math.random() * 255)} // <span className="text-green-500">ENCRYPTED</span></p>
+                                        </div>
+                                        <div className="p-4 bg-white/5 rounded-2xl border border-white/5 group hover:border-blue-500/20 transition-all">
+                                            <p className="text-[9px] text-muted-foreground uppercase font-black tracking-widest mb-1 opacity-50">Relay Node</p>
+                                            <p className="text-xs font-bold text-white tracking-tight flex items-center gap-2">
+                                                <Globe className="h-3 w-3 text-blue-500" />
+                                                {activeUser.location || 'Unknown Coordinates'}
+                                            </p>
+                                        </div>
+                                    </div>
                                 </div>
-                                <div className="flex justify-between items-center py-2 border-b border-white/5 text-white">
-                                    <span className="text-[11px] text-muted-foreground font-bold flex items-center gap-2"><Mail className="h-3 w-3" /> Email</span>
-                                    <span className="text-xs truncate max-w-[120px]">{activeUser.email}</span>
+
+                                {/* Account Integrity Checks */}
+                                <div>
+                                    <h4 className="text-[10px] font-black text-muted-foreground uppercase tracking-[0.2em] mb-4 flex items-center gap-2">
+                                        <ShieldCheck className="h-3 w-3" /> Integrity Diagnostics
+                                    </h4>
+                                    <div className="space-y-2">
+                                        <div className="flex items-center justify-between p-3 rounded-xl bg-white/[0.02] border border-white/5">
+                                            <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Email Verification</span>
+                                            {activeUser.isEmailVerified ? (
+                                                <Badge className="bg-green-500/10 text-green-500 border-green-500/20 shadow-[0_0_10px_rgba(34,197,94,0.1)]">VERIFIED</Badge>
+                                            ) : (
+                                                <Badge variant="destructive" className="bg-red-500/10 text-red-500 border-red-500/20">PENDING</Badge>
+                                            )}
+                                        </div>
+                                        <div className="flex items-center justify-between p-3 rounded-xl bg-white/[0.02] border border-white/5">
+                                            <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Device Auth</span>
+                                            {activeUser.deviceAuthenticated ? (
+                                                <div className="flex items-center gap-1.5 text-blue-400 font-bold text-[10px]">
+                                                    <ShieldCheck className="h-3 w-3" /> SECURE
+                                                </div>
+                                            ) : (
+                                                <div className="flex items-center gap-1.5 text-zinc-500 font-bold text-[10px]">
+                                                    <Lock className="h-3 w-3" /> UNSAFE
+                                                </div>
+                                            )}
+                                        </div>
+                                        <div className="flex items-center justify-between p-3 rounded-xl bg-white/[0.02] border border-white/5">
+                                            <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Identity (KYC)</span>
+                                            <div className="flex items-center gap-1.5 text-green-400 font-bold text-[10px]">
+                                                <CheckCircle2 className="h-3 w-3" /> CLEARED
+                                            </div>
+                                        </div>
+                                        <div className="flex items-center justify-between p-3 rounded-xl bg-white/[0.02] border border-white/5">
+                                            <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Fin. Compliance</span>
+                                            <div className="flex items-center gap-1.5 text-primary font-bold text-[10px]">
+                                                <Zap className="h-3 w-3" /> IMF_SYNCED
+                                            </div>
+                                        </div>
+                                    </div>
                                 </div>
-                                <div className="flex justify-between items-center py-2 border-b border-white/5 text-white">
-                                    <span className="text-[11px] text-muted-foreground font-bold flex items-center gap-2"><Phone className="h-3 w-3" /> WhatsApp</span>
-                                    <span className="text-xs">{activeUser.phone || 'N/A'}</span>
+
+                                {/* Financial Snapshot */}
+                                <div>
+                                    <h4 className="text-[10px] font-black text-muted-foreground uppercase tracking-[0.2em] mb-4">Registry Asset Value</h4>
+                                    <div className="p-5 bg-gradient-to-br from-primary/10 to-transparent border border-primary/20 rounded-[2rem] text-center shadow-xl shadow-primary/5">
+                                        <p className="text-[9px] font-black text-primary/70 uppercase tracking-[0.3em] mb-1">TOTAL LIQUIDITY</p>
+                                        <p className="text-3xl font-black text-white italic tracking-tighter">£{activeUser.totalBalance?.toLocaleString() || '0'}</p>
+                                    </div>
+                                </div>
+
+                                <div className="pt-4 pb-8">
+                                    <Button className="w-full bg-white/5 border border-white/10 hover:border-primary/40 text-white font-black uppercase tracking-widest text-[10px] rounded-2xl h-14 group">
+                                        Update Node Privileges
+                                    </Button>
+                                    <p className="text-[8px] text-muted-foreground uppercase tracking-widest text-center mt-3 opacity-30">Security Clearance Level // 4</p>
                                 </div>
                             </div>
-                        </div>
-
-                        <div className="pt-4">
-                            <Button variant="outline" className="w-full border-primary/20 hover:bg-primary/10 text-primary font-bold rounded-xl h-12">
-                                Manage User Profile
-                            </Button>
-                        </div>
+                        </ScrollArea>
                     </div>
                 ) : (
-                    <div className="h-full flex flex-col items-center justify-center text-center">
-                        <Monitor className="h-10 w-10 text-white/5 mb-4" />
-                        <p className="text-[11px] text-muted-foreground uppercase tracking-widest font-bold">No User Active</p>
+                    <div className="h-full flex flex-col items-center justify-center text-center p-8">
+                        <div className="h-16 w-16 bg-white/5 rounded-full flex items-center justify-center mb-4 border border-white/10">
+                            <Monitor className="h-8 w-8 text-white/10" />
+                        </div>
+                        <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-black">NO ACTIVE SELECTION</p>
+                        <p className="text-[8px] text-muted-foreground uppercase tracking-widest mt-2 opacity-30">Awaiting user link protocol...</p>
                     </div>
                 )}
             </div>

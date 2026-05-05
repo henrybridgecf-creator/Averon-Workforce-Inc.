@@ -11,14 +11,15 @@ export const averpayUsers = [
         verificationIdUrl: 'mock-id-john.pdf',
         proofOfAddressUrl: 'mock-address-john.pdf',
         averpayId: "AP-JD12345",
-        role: "Webflow Developer",
+        role: "Freelancer",
         location: "New York, USA",
         rank: 12,
         totalBalance: 1250.00,
         pendingBalance: 450.00,
         status: 'active',
+        isEmailVerified: true,
+        isOnline: true,
         deviceAuthenticated: true,
-        browserInfo: "Chrome 122 on macOS",
         lastSeen: new Date().toISOString(),
         bankDetails: {
           bankName: "Bank of America",
@@ -48,8 +49,9 @@ export const averpayUsers = [
         totalBalance: 7520.00,
         pendingBalance: 1200.00,
         status: 'active',
+        isEmailVerified: true,
+        isOnline: true,
         deviceAuthenticated: true,
-        browserInfo: "Safari on iPhone",
         lastSeen: new Date().toISOString(),
         bankDetails: {
           bankName: "Chase Bank",
@@ -64,28 +66,31 @@ export const averpayUsers = [
     },
     {
         uid: "mock-user-03",
-        fullName: "Bontle Maele",
-        email: "bontle.maele@averpay.io",
+        fullName: "Bontle Prudence",
+        email: "btprudence@averpay.io",
         password: "cafelink123",
         personalEmail: "bobomaele@gmail.com",
         phone: "+267 74 891 931",
-        profilePhoto: "https://avatar.vercel.sh/bontle-maele.png",
+        profilePhoto: "https://avatar.vercel.sh/bontle-prudence.png",
         verificationIdUrl: "mock-id-bontle.pdf",
         proofOfAddressUrl: "mock-address-bontle.pdf",
         averpayId: "AP-BM26456",
-        role: "Graphic Designer",
+        role: "Freelancer",
         location: "Gaborone, Botswana",
         rank: 58,
         totalBalance: 300900.00,
         pendingBalance: 1650.00,
         status: 'active',
+        isEmailVerified: true,
+        isOnline: true,
         deviceAuthenticated: true,
-        maintenanceFeeDue: 450.0,
+        maintenanceFeeDue: 0,
+        imfCleared: true,
         browserInfo: "Edge 121 on Windows",
         lastSeen: new Date().toISOString(),
         bankDetails: {
           bankName: "FNB Botswana",
-          accountHolder: "Bontle Maele",
+          accountHolder: "Bontle Prudence",
           accountNumber: "•••• •••• •••• 9876",
         },
         notificationPreferences: {
@@ -105,13 +110,14 @@ export const averpayUsers = [
         verificationIdUrl: '',
         proofOfAddressUrl: '',
         averpayId: "AP-JD54321",
-        role: "UX Researcher",
+        role: "Client",
         location: "London, UK",
         rank: 99,
         totalBalance: 0.00,
         pendingBalance: 0.00,
         status: 'active',
-        deviceAuthenticated: true,
+        isEmailVerified: true,
+        isOnline: false,
         browserInfo: "Firefox on Linux",
         lastSeen: new Date().toISOString(),
         bankDetails: {
@@ -126,13 +132,3 @@ export const averpayUsers = [
         }
     }
 ];
-
-export function findUserByEmail(email: string) {
-    if (!email) return undefined;
-    return averpayUsers.find(u => u.email.toLowerCase() === email.toLowerCase());
-}
-
-export function findUserById(uid: string) {
-    if (!uid) return undefined;
-    return averpayUsers.find(u => u.uid === uid);
-}

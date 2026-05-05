@@ -8,20 +8,24 @@ import Link from "next/link";
 import { Card, CardContent } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
 import React, { useState, useEffect } from "react";
-import { initializeUsers, updateUserData } from "@/lib/mock-data";
+import { initializeUsers, updateUserData, addActivityLog, activityLogs } from "@/lib/mock-data";
 import { useRouter } from "next/navigation";
 import DashboardLayout from "@/components/ui/dashboard-layout";
+import { Badge } from "@/components/ui/badge";
 
 export default function SettingsPage() {
   const { toast } = useToast();
   const router = useRouter();
   const [userProfile, setUserProfile] = useState<any>(null);
+  const [userLogs, setUserLogs] = useState<any[]>([]);
 
   useEffect(() => {
     initializeUsers();
     const storedUser = localStorage.getItem('loggedInUser');
     if (storedUser) {
-        setUserProfile(JSON.parse(storedUser));
+        const user = JSON.parse(storedUser);
+        setUserProfile(user);
+        setUserLogs(activityLogs.filter(l => l.user === user.fullName || l.target === user.fullName).slice(0, 5));
     } else {
         router.push('/login');
     }
@@ -44,6 +48,13 @@ export default function SettingsPage() {
     
     const updatedUser = updateUserData(userProfile.uid, { notificationPreferences: updatedPreferences });
     setUserProfile(updatedUser);
+
+    addActivityLog({
+        type: 'profile_update',
+        user: userProfile.fullName,
+        description: `Updated ${setting} preference to ${enabled ? 'Enabled' : 'Disabled'}.`,
+        timestamp: new Date().toISOString()
+    });
 
     toast({
       title: "Settings Updated",
@@ -154,6 +165,47 @@ export default function SettingsPage() {
                         </div>
                         </CardContent>
                     </Card>
+                </section>
+
+                <section>
+                    <div className="flex items-center justify-between mb-4">
+                        <h3 className="text-lg font-semibold">Security Activity Terminal</h3>
+                        <Badge variant="outline" className="bg-primary/10 text-primary border-primary/20 text-[10px] font-black uppercase tracking-widest">Live Audit</Badge>
+                    </div>
+                    <Card className="bg-[#050f26] border-white/5 rounded-3xl shadow-xl overflow-hidden">
+                        <CardContent className="p-0 divide-y divide-white/5">
+                            {userLogs.length > 0 ? userLogs.map((log, i) => (
+                                <div key={i} className="flex items-center justify-between p-6 hover:bg-white/5 transition-colors">
+                                    <div className="flex items-center gap-4">
+                                        <div className="h-10 w-10 rounded-xl bg-white/5 flex items-center justify-center border border-white/5 text-primary">
+                                            {log.type === 'login' ? <ShieldCheck className="h-5 w-5" /> : <User className="h-5 w-5" />}
+                                        </div>
+                                        <div>
+                                            <p className="font-bold text-white text-sm">
+                                                {log.type === 'login' ? 'System Login' : 
+                                                 log.type === 'profile_update' ? 'Profile Mutation' :
+                                                 log.type === 'submission' ? 'Resource Dispatch' : 'AverPay Event'}
+                                            </p>
+                                            <p className="text-[10px] text-muted-foreground font-medium uppercase tracking-widest">
+                                                {log.location || 'Protocol Node'} • {log.description || 'Verified interaction'}
+                                            </p>
+                                        </div>
+                                    </div>
+                                    <div className="text-right">
+                                        <p className="text-xs font-bold text-white">{log.timestamp ? new Date(log.timestamp).toLocaleTimeString() : 'Recent'}</p>
+                                        <p className="text-[10px] text-green-500 font-black uppercase tracking-widest">Success</p>
+                                    </div>
+                                </div>
+                            )) : (
+                                <div className="p-10 text-center text-muted-foreground text-sm">
+                                    No local cache logs found in this cycle.
+                                </div>
+                            )}
+                        </CardContent>
+                    </Card>
+                    <p className="text-[10px] text-muted-foreground mt-4 px-2 leading-relaxed">
+                        Security logs are retained for 30 days. If you detect unauthorized access from an unknown IP or location, contact the supervisor immediately via the secure terminal.
+                    </p>
                 </section>
             </div>
         </div>

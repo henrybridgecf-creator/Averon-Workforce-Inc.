@@ -1,412 +1,447 @@
 'use client';
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Card } from "@/components/ui/card";
 import { 
-  PoundSterling,
-  Briefcase,
-  Users,
-  MapPin,
-  Clock,
-  AlertCircle,
-  Calendar as CalendarIcon,
-  Wifi,
-  Mail,
-  MessageCircle,
-  TrendingUp,
-  ShieldCheck,
-  Activity,
-  ArrowUpRight,
-  ChevronRight,
+    LayoutDashboard, 
+    Briefcase, 
+    Wallet, 
+    ArrowUpRight, 
+    ArrowDownRight, 
+    Clock, 
+    CheckCircle2, 
+    TrendingUp,
+    Zap,
+    ShieldCheck,
+    LucideIcon,
+    ChevronRight,
+    BarChart3,
+    Activity,
+    Lock,
+    MapPin,
+    Upload,
+    Eye,
+    Search,
+    Users,
+    PoundSterling
 } from "lucide-react";
-import Link from "next/link";
-import { Badge } from "@/components/ui/badge";
-import React, { useEffect, useState, useMemo } from "react";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import RealTimeStatus from "@/components/ui/real-time-status";
 import DashboardLayout from "@/components/ui/dashboard-layout";
-import { Bar, BarChart, ResponsiveContainer, XAxis, YAxis, Tooltip as RechartsTooltip, Cell } from "recharts"
-import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
-import { Skeleton } from "@/components/ui/skeleton";
-import { getInitials } from "@/lib/utils";
-import { useRouter } from "next/navigation";
-import { projectsData, initializeUsers, activityLogs } from "@/lib/mock-data";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Calendar } from "@/components/ui/calendar";
-import { DateRange } from "react-day-picker";
-import { format } from 'date-fns';
-import { useToast } from "@/hooks/use-toast";
+import { Button } from "@/components/ui/button";
+import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Badge } from "@/components/ui/badge";
 import { motion, AnimatePresence } from "motion/react";
+import { useState, useEffect, useMemo } from "react";
+import { initializeUsers, usersData, projectsData, updateUserData, saveData, addActivityLog } from "@/lib/mock-data";
+import { 
+    XAxis, 
+    YAxis, 
+    CartesianGrid, 
+    Tooltip, 
+    ResponsiveContainer, 
+    AreaChart, 
+    Area 
+} from 'recharts';
+import { getInitials, cn } from "@/lib/utils";
+import { useToast } from "@/hooks/use-toast";
+import Link from "next/link";
 
+interface StatCardProps {
+    title: string;
+    value: string;
+    description: string;
+    icon: LucideIcon;
+    trend?: {
+        value: string;
+        isUp: boolean;
+    };
+    delay?: number;
+}
 
-export default function DashboardPage() {
-  const router = useRouter();
-  const { toast } = useToast();
-  const [isLoading, setIsLoading] = useState(true);
-  const [userProfile, setUserProfile] = useState<any>(null);
-  const [dateRange, setDateRange] = useState<DateRange | undefined>();
-  const [showMaintenanceAlert, setShowMaintenanceAlert] = useState(true);
-
-  useEffect(() => {
-    initializeUsers(); 
-    const storedUserRaw = localStorage.getItem('loggedInUser');
-    if (storedUserRaw) {
-        try {
-            const storedUser = JSON.parse(storedUserRaw);
-            setUserProfile(storedUser);
-            
-            if (storedUser.uid === 'mock-user-03') {
-                 toast({
-                    title: "Priority: Maintenance Synchronization Required",
-                    description: "Your profile was excluded from the recent platform maintenance cycle. A manual update and synchronization fee of €450.00 is required. Please contact support.",
-                    duration: 15000,
-                });
-            }
-        } catch (e) {
-            router.push('/login');
-        }
-    } else {
-        router.push('/login');
-    }
-    setIsLoading(false);
-  }, [router, toast]);
-
-  const earningsData = useMemo(() => {
-    const monthlyEarnings: { [key: string]: number } = {};
-    const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-
-    monthNames.forEach(month => {
-        monthlyEarnings[month] = 0;
-    });
-    
-    if (!userProfile) {
-        return Object.keys(monthlyEarnings).map(month => ({ name: month, total: 0 }));
-    }
-
-    const userProjects = projectsData.filter(p => p.assignedTo === userProfile.uid);
-
-    userProjects.forEach(project => {
-        if (project.status === 'approved' && project.submittedAt) {
-            const submittedDate = new Date(project.submittedAt);
-            if (isNaN(submittedDate.getTime())) return; 
-
-            let isInRange = true;
-            if (dateRange?.from) {
-                if (!dateRange.to) {
-                    isInRange = submittedDate >= dateRange.from;
-                } else {
-                    isInRange = submittedDate >= dateRange.from && submittedDate <= dateRange.to;
-                }
-            }
-
-            if (isInRange) {
-                const month = monthNames[submittedDate.getMonth()];
-                if (month) {
-                    monthlyEarnings[month] += project.paymentAmount;
-                }
-            }
-        }
-    });
-
-    return Object.keys(monthlyEarnings).map((month, idx) => ({
-        name: month,
-        total: monthlyEarnings[month],
-        active: idx === new Date().getMonth()
-    }));
-  }, [dateRange, userProfile]);
-
-  const getStatusBadge = (status: string) => {
-    switch(status.toLowerCase()) {
-      case "approved":
-        return <Badge className="bg-green-500/10 text-green-500 border-green-500/20 hover:bg-green-500/20">Approved</Badge>;
-      case "submitted":
-         return <Badge className="bg-blue-500/10 text-blue-500 border-blue-500/20 hover:bg-blue-500/20">Submitted</Badge>;
-      case "pending":
-         return <Badge className="bg-yellow-500/10 text-yellow-500 border-yellow-500/20 hover:bg-yellow-500/20">Pending</Badge>;
-      case "new":
-        return <Badge className="bg-sky-500/10 text-sky-500 border-sky-500/20 hover:bg-sky-500/20">New</Badge>;
-      default: return <Badge variant="secondary">{status}</Badge>;
-    }
-  };
-  
-  if (isLoading || !userProfile) {
-      return (
-          <DashboardLayout>
-              <div className="flex-1 space-y-4 p-4 sm:p-8 pt-6">
-                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-6">
-                    <Skeleton className="h-12 w-1/2 rounded-xl" />
-                    <Skeleton className="h-24 w-full sm:w-64 rounded-xl" />
-                </div>
-                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                    <Skeleton className="h-32 rounded-3xl" />
-                    <Skeleton className="h-32 rounded-3xl" />
-                    <Skeleton className="h-32 rounded-3xl" />
-                </div>
-                <div className="grid gap-4 grid-cols-1 lg:grid-cols-7">
-                    <Skeleton className="col-span-1 lg:col-span-4 h-96 rounded-3xl" />
-                    <Skeleton className="col-span-1 lg:col-span-3 h-96 rounded-3xl" />
-                </div>
-              </div>
-          </DashboardLayout>
-      )
-  }
-
-
-  return (
-    <DashboardLayout>
-         <div className="flex-1 space-y-8 p-4 sm:p-8 pt-6 max-w-7xl mx-auto animate-in fade-in slide-in-from-bottom-2 duration-700">
-            <AnimatePresence>
-                {showMaintenanceAlert && userProfile.uid === 'mock-user-03' && (
-                    <motion.div 
-                        initial={{ opacity: 0, scale: 0.95, y: -20 }}
-                        animate={{ opacity: 1, scale: 1, y: 0 }}
-                        exit={{ opacity: 0, scale: 0.95, y: -20 }}
-                        className="relative"
-                    >
-                        <Alert className="bg-destructive/10 border-destructive/20 text-destructive-foreground p-8 shadow-2xl rounded-[2rem] overflow-hidden group">
-                           <div className="absolute inset-0 bg-gradient-to-br from-destructive/10 via-transparent to-transparent opacity-50" />
-                            <div className="flex flex-col md:flex-row items-start gap-6 relative z-10">
-                                <div className="bg-destructive p-4 rounded-2xl animate-pulse shadow-lg shadow-destructive/20">
-                                    <Wifi className="h-8 w-8 text-destructive-foreground" />
-                                </div>
-                                <div className="flex-1 space-y-4">
-                                    <div className="space-y-1">
-                                        <AlertTitle className="text-2xl font-black text-white flex items-center gap-2">
-                                            System Sync Required
-                                            <Badge variant="outline" className="text-[10px] uppercase tracking-widest border-destructive/50 text-destructive bg-destructive/5">Immediate Action</Badge>
-                                        </AlertTitle>
-                                        <AlertDescription className="text-lg text-white/70 leading-relaxed max-w-3xl">
-                                            Telemetry records indicate profile <span className="font-mono bg-white/10 px-2 rounded text-white">{userProfile.averpayId}</span> was excluded from global maintenance cycle 4.0. 
-                                            <span className="block mt-3 text-white font-medium">
-                                                A synchronization fee of <span className="bg-white text-black px-2 py-0.5 rounded-md font-bold">€450.00</span> must be cleared to resume automatic payroll updates and data encryption protocols.
-                                            </span>
-                                        </AlertDescription>
-                                    </div>
-                                    <div className="flex flex-wrap gap-4 pt-2">
-                                        <Button asChild className="bg-white text-black hover:bg-white/90 font-bold px-8 py-6 rounded-2xl shadow-xl shadow-black/20">
-                                            <a href="mailto:averon.hrdesk@outlook.com">
-                                                <Mail className="mr-2 h-5 w-5" />
-                                                Resolve with Support
-                                            </a>
-                                        </Button>
-                                        <Button variant="ghost" onClick={() => setShowMaintenanceAlert(false)} className="text-white/50 hover:text-white h-12 px-6">Dismiss Notice</Button>
-                                    </div>
-                                </div>
-                            </div>
-                        </Alert>
-                    </motion.div>
-                )}
-            </AnimatePresence>
-
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
-                <div>
-                    <h2 className="text-4xl font-black tracking-tight text-white mb-2">Hello, {userProfile?.fullName?.split(' ')[0] || 'User'} 👋</h2>
-                    <p className="text-muted-foreground flex items-center gap-2">
-                        <ShieldCheck className="h-4 w-4 text-primary" />
-                        AverPay Secure Hub v4.0.2 Active
-                    </p>
-                </div>
-                 <div className="flex items-center space-x-6 p-6 bg-white/5 backdrop-blur-xl rounded-3xl border border-white/10 shadow-xl group hover:border-primary/30 transition-all">
-                    <div className="relative">
-                        <div className="absolute -inset-1 bg-primary rounded-full blur opacity-20 group-hover:opacity-40 transition" />
-                        <Avatar className="h-16 w-16 border-2 border-white/10 relative">
-                            <AvatarImage src={userProfile?.profilePhoto} />
-                            <AvatarFallback className="bg-primary/20 text-primary">{getInitials(userProfile?.fullName || 'U')}</AvatarFallback>
-                        </Avatar>
-                    </div>
-                    <div>
-                        <p className="font-black text-xl text-white">{userProfile?.fullName}</p>
-                        <div className="flex flex-wrap gap-2 mt-2">
-                            <Badge variant="outline" className="font-mono text-[10px] text-primary border-primary/20 bg-primary/5">{userProfile?.averpayId}</Badge>
-                            <Badge variant="outline" className="text-[10px] flex items-center gap-1 border-white/10 bg-white/5">
-                                <MapPin className="h-3 w-3" />
-                                {userProfile.location || 'Global'}
-                            </Badge>
-                        </div>
-                    </div>
-                </div>
+const StatCard = ({ title, value, description, icon: Icon, trend, delay = 0 }: StatCardProps) => (
+    <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.8, delay, ease: [0.16, 1, 0.3, 1] }}
+        whileHover={{ y: -5 }}
+        className="h-full"
+    >
+        <Card className="p-8 h-full bg-card/40 border-white/[0.05] hover:border-primary/40 transition-all group relative overflow-hidden rounded-[2.5rem] shadow-2xl backdrop-blur-3xl">
+            <div className="absolute top-0 right-0 p-6 opacity-[0.02] group-hover:opacity-[0.06] transition-opacity duration-700">
+                <Icon className="h-28 w-28 text-white scale-110" />
             </div>
             
-            <div className="grid gap-6 md:grid-cols-3">
-              <Card className="bg-gradient-to-br from-[#0c1a3a] to-[#050f26] border-white/5 rounded-3xl shadow-2xl relative overflow-hidden group">
-                <div className="absolute top-0 right-0 p-8 opacity-10 group-hover:opacity-20 transition-opacity">
-                    <PoundSterling className="h-24 w-24 text-white" />
-                </div>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm font-bold uppercase tracking-widest text-primary">Liquid Assets</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="text-4xl font-black text-white">£{(userProfile?.totalBalance || 0).toLocaleString()}</div>
-                  <div className="flex items-center gap-2 mt-4">
-                    <Link href="/dashboard/projects?status=pending" className="inline-flex items-center gap-1.5 px-3 py-1 bg-white/5 rounded-full text-xs text-muted-foreground hover:text-white transition-colors">
-                        <TrendingUp className="h-3 w-3 text-green-500" />
-                        +£{(userProfile?.pendingBalance || 0).toLocaleString()} Processing
-                    </Link>
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Card className="bg-[#050f26] border-white/5 rounded-3xl shadow-2xl relative group">
-                <CardHeader className="pb-2">
-                    <CardTitle className="text-sm font-bold uppercase tracking-widest text-muted-foreground">Network Status</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="flex items-center gap-3">
-                    <div className="h-12 w-12 bg-primary/10 rounded-2xl flex items-center justify-center">
-                        <MessageCircle className="h-6 w-6 text-primary" />
+            <div className="absolute inset-0 bg-gradient-to-br from-primary/[0.03] to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+            
+            <div className="relative space-y-6">
+                <div className="flex items-center justify-between">
+                    <div className="h-14 w-14 rounded-2xl bg-white/[0.03] flex items-center justify-center border border-white/10 group-hover:bg-primary/20 group-hover:border-primary/30 transition-all duration-500">
+                        <Icon className="h-6 w-6 text-white group-hover:text-primary transition-colors duration-500" />
                     </div>
-                    <div>
-                        <div className="text-lg font-bold text-white leading-none">Supervisor Hub</div>
-                        <p className="text-xs text-muted-foreground mt-1">Status: <span className="text-green-500 font-bold">Encrypted & Online</span></p>
-                    </div>
-                  </div>
-                  <Button asChild variant="outline" className="w-full justify-between rounded-xl border-white/10 hover:bg-white/5 hover:text-white">
-                    <Link href="/dashboard/chat">
-                        Open Secure Terminal
-                        <ArrowUpRight className="h-4 w-4" />
-                    </Link>
-                  </Button>
-                </CardContent>
-              </Card>
-
-              <Card className="bg-[#050f26] border-white/5 rounded-3xl shadow-2xl relative">
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm font-bold uppercase tracking-widest text-muted-foreground">Workload Metrics</CardTitle>
-                </CardHeader>
-                <CardContent>
-                   <div className="flex items-baseline gap-2">
-                        <div className="text-4xl font-black text-white">{projectsData?.filter(p => p.assignedTo === userProfile.uid).length || 0}</div>
-                        <span className="text-xs text-muted-foreground font-bold">Total Operations</span>
-                   </div>
-                   <div className="mt-4 pt-4 border-t border-white/5 flex justify-between items-center">
-                        <div className="text-xs font-bold text-muted-foreground">Network Rank:</div>
-                        <Badge className="bg-primary/10 text-primary border-primary/20">Tier #{userProfile?.rank || '0'}</Badge>
-                   </div>
-                </CardContent>
-              </Card>
-            </div>
-
-            <div className="grid gap-8 grid-cols-1 lg:grid-cols-7">
-                <Card className="col-span-1 lg:col-span-4 bg-[#050f26] border-white/5 rounded-[2.5rem] shadow-2xl overflow-hidden">
-                  <CardHeader className="border-b border-white/5 px-8 pt-8 flex flex-row items-center justify-between">
-                    <div>
-                        <CardTitle className="text-xl font-bold text-white">Active Operations 🗄️</CardTitle>
-                        <CardDescription>Real-time status of your assigned projects.</CardDescription>
-                    </div>
-                    <Button variant="ghost" asChild className="text-primary hover:bg-primary/10 rounded-xl">
-                        <Link href="/dashboard/projects">View All <ChevronRight className="ml-1 h-4 w-4" /></Link>
-                    </Button>
-                  </CardHeader>
-                  <CardContent className="px-8 pb-8 pt-6 space-y-6">
-                    {projectsData && projectsData.filter(p => p.assignedTo === userProfile.uid).length > 0 ? (
-                        <div className="divide-y divide-white/5">
-                            {projectsData.filter(p => p.assignedTo === userProfile.uid).map((project: any) => (
-                                <div key={project.id} className="py-4 first:pt-0 last:pb-0 flex items-center group cursor-pointer">
-                                    <div className="h-12 w-12 rounded-2xl bg-white/5 flex items-center justify-center border border-white/5 group-hover:border-primary/20 group-hover:bg-primary/5 transition-all">
-                                        <Briefcase className="h-5 w-5 text-white/50 group-hover:text-primary" />
-                                    </div>
-                                    <div className="ml-4 flex-1">
-                                        <p className="font-bold text-white group-hover:text-primary transition-colors">{project.title}</p>
-                                        <p className="text-xs text-muted-foreground">Submission ID: AP-X{project.id.slice(-5)}</p>
-                                    </div>
-                                    <div className="text-right flex flex-col items-end gap-1.5">
-                                        <p className="font-black text-white">£{project.paymentAmount.toLocaleString()}</p>
-                                        {getStatusBadge(project.status)}
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
-                    ) : (
-                        <div className="py-12 text-center space-y-4">
-                            <div className="h-16 w-16 bg-white/5 rounded-full flex items-center justify-center mx-auto text-white/20">
-                                <Activity className="h-8 w-8" />
-                            </div>
-                            <p className="text-muted-foreground font-medium">No projects found in your local buffer.</p>
+                    {trend && (
+                        <div className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest ${trend.isUp ? 'bg-green-500/10 text-green-400 border border-green-500/20' : 'bg-red-500/10 text-red-400 border border-red-500/20'}`}>
+                            {trend.isUp ? <ArrowUpRight className="h-3 w-3" /> : <ArrowDownRight className="h-3 w-3" />}
+                            {trend.value}
                         </div>
                     )}
-                  </CardContent>
-                </Card>
-
-                <Card className="col-span-1 lg:col-span-3 bg-[#050f26] border-white/5 rounded-[2.5rem] shadow-2xl flex flex-col overflow-hidden">
-                  <CardHeader className="px-8 pt-8 flex flex-row items-center justify-between">
-                    <CardTitle className="text-xl font-bold text-white">Earnings Analytics</CardTitle>
-                    <Popover>
-                        <PopoverTrigger asChild>
-                            <Button
-                                id="date"
-                                variant={"outline"}
-                                className="h-10 rounded-xl border-white/10 bg-white/5 text-xs text-white hover:bg-white/10"
-                            >
-                                <CalendarIcon className="mr-2 h-3 w-3" />
-                                {dateRange?.from ? format(dateRange.from, "MMM dd") : "Period"}
-                            </Button>
-                        </PopoverTrigger>
-                        <PopoverContent className="w-auto p-0" align="end">
-                            <Calendar
-                                initialFocus
-                                mode="range"
-                                selected={dateRange}
-                                onSelect={setDateRange}
-                                numberOfMonths={1}
-                            />
-                        </PopoverContent>
-                    </Popover>
-                  </CardHeader>
-                  <CardContent className="flex-1 px-4 pb-8">
-                     <ChartContainer config={{}} className="h-64 w-full">
-                        <ResponsiveContainer width="100%" height="100%">
-                            <BarChart data={earningsData}>
-                                <XAxis
-                                    dataKey="name"
-                                    stroke="#4b5563"
-                                    fontSize={10}
-                                    tickLine={false}
-                                    axisLine={false}
-                                    dy={10}
-                                />
-                                <YAxis
-                                    stroke="#4b5563"
-                                    fontSize={10}
-                                    tickLine={false}
-                                    axisLine={false}
-                                    tickFormatter={(value) => `£${value}`}
-                                />
-                                <Bar dataKey="total" radius={[6, 6, 0, 0]}>
-                                    {earningsData.map((entry, index) => (
-                                        <Cell key={`cell-${index}`} fill={entry.active ? 'hsl(var(--primary))' : 'rgba(255,255,255,0.05)'} />
-                                    ))}
-                                </Bar>
-                                <RechartsTooltip 
-                                    cursor={{fill: 'rgba(255,255,255,0.02)'}}
-                                    content={({ active, payload }) => {
-                                        if (active && payload && payload.length) {
-                                            return (
-                                                <div className="bg-[#0a1633] border border-white/10 p-3 rounded-xl shadow-2xl">
-                                                    <p className="text-[10px] font-bold text-primary uppercase tracking-widest">{payload[0].payload.name}</p>
-                                                    <p className="text-lg font-black text-white">£{Number(payload[0].value).toLocaleString()}</p>
-                                                </div>
-                                            );
-                                        }
-                                        return null;
-                                    }}
-                                />
-                            </BarChart>
-                        </ResponsiveContainer>
-                    </ChartContainer>
-                    <div className="mt-8 grid grid-cols-2 gap-4 px-4">
-                        <div className="p-4 rounded-2xl bg-white/5 border border-white/5">
-                            <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest mb-1">Peak Month</p>
-                            <p className="text-lg font-black text-white">{earningsData.sort((a,b) => b.total - a.total)[0]?.name || 'N/A'}</p>
-                        </div>
-                        <div className="p-4 rounded-2xl bg-white/5 border border-white/5">
-                            <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest mb-1">Fiscal Year</p>
-                            <p className="text-lg font-black text-white">2026</p>
-                        </div>
-                    </div>
-                  </CardContent>
-                </Card>
+                </div>
+                
+                <div>
+                    <p className="text-[10px] font-black uppercase tracking-[0.25em] text-muted-foreground/40 mb-2">{title}</p>
+                    <h3 className="text-4xl font-black text-white tracking-tighter group-hover:text-primary transition-colors duration-500">{value}</h3>
+                </div>
+                
+                <p className="text-[10px] text-muted-foreground/60 font-bold uppercase tracking-wider">{description}</p>
             </div>
-         </div>
-    </DashboardLayout>
-  );
+        </Card>
+    </motion.div>
+);
+
+const chartData = [
+    { name: 'Jan', earnings: 4500 },
+    { name: 'Feb', earnings: 5200 },
+    { name: 'Mar', earnings: 7800 },
+    { name: 'Apr', earnings: 6100 },
+    { name: 'May', earnings: 9400 },
+    { name: 'Jun', earnings: 8200 },
+];
+
+export default function DashboardPage() {
+    const { toast } = useToast();
+    const [user, setUser] = useState<any>(null);
+    const [stats, setStats] = useState({
+        total: 0,
+        pending: 0,
+        completed: 0,
+        active: 0
+    });
+
+    useEffect(() => {
+        initializeUsers();
+        const refreshProfile = () => {
+            const storedUserRaw = localStorage.getItem('loggedInUser');
+            if (storedUserRaw) {
+                try {
+                    const storedUser = JSON.parse(storedUserRaw);
+                    setUser(storedUser);
+
+                    // Calculate actual stats from projectsData
+                    const userProjects = projectsData.filter((p: any) => p.assignedTo === storedUser.uid);
+                    setStats({
+                        total: userProjects.length,
+                        pending: userProjects.filter((p: any) => p.status === 'new' || p.status === 'requires-edits').length,
+                        completed: userProjects.filter((p: any) => p.status === 'approved' || p.status === 'paid').length,
+                        active: userProjects.filter((p: any) => p.status === 'submitted').length
+                    });
+                } catch (e) {
+                    console.error("Failed to parse loggedInUser", e);
+                }
+            }
+        };
+
+        refreshProfile();
+
+        const handleStorageChange = (e: StorageEvent) => {
+            if (e.key === 'loggedInUser' || e.key === 'usersData') {
+                refreshProfile();
+            }
+        };
+        window.addEventListener('storage', handleStorageChange);
+        return () => window.removeEventListener('storage', handleStorageChange);
+    }, []);
+
+    const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file || !user) return;
+
+        const reader = new FileReader();
+        reader.onloadend = () => {
+            const dataUrl = reader.result as string;
+            const updatedUser = updateUserData(user.uid, { profilePhoto: dataUrl });
+            setUser(updatedUser);
+            saveData('loggedInUser', updatedUser);
+
+            addActivityLog({
+                type: 'profile_update',
+                user: user.fullName,
+                target: 'Registry',
+                description: `Updated profile identification photo.`
+            });
+
+            toast({
+                title: 'Photo Synchronized',
+                description: `Registry updated with your latest visual identification.`,
+            });
+        };
+        reader.readAsDataURL(file);
+    };
+
+    if (!user) return null;
+
+    const completionRate = Math.round((stats.completed / (stats.total || 1)) * 100);
+
+    const isClient = user?.role === 'Client';
+    const isFreelancer = user?.role === 'Freelancer';
+
+    const freelancerStats = [
+        { title: "Available Liquid", value: `£${(user.totalBalance || 0).toLocaleString()}`, description: "Verified funds ready for dispatch", icon: Wallet, trend: { value: "+12.5%", isUp: true }, delay: 0.1 },
+        { title: "Ops Success", value: `${completionRate}%`, description: "Mission completion accuracy", icon: CheckCircle2, trend: { value: "High", isUp: true }, delay: 0.2 },
+        { title: "Pending Review", value: stats.active.toString(), description: "Missions in auditing pipeline", icon: Clock, delay: 0.3 },
+        { title: "Open Briefs", value: stats.pending.toString(), description: "Unclaimed operational targets", icon: Briefcase, delay: 0.4 },
+    ];
+
+    const clientStats = [
+        { title: "Total Budget", value: `£${(projectsData.filter((p: any) => p.assignedTo === user.uid).reduce((acc: number, p: any) => acc + (p.paymentAmount || 0), 0)).toLocaleString()}`, description: "Active capital allocated", icon: PoundSterling, trend: { value: "+5.2%", isUp: true }, delay: 0.1 },
+        { title: "Active Missions", value: projectsData.filter((p: any) => p.assignedTo === user.uid).length.toString(), description: "Ongoing strategic operations", icon: Activity, trend: { value: "On Track", isUp: true }, delay: 0.2 },
+        { title: "Awaiting Review", value: projectsData.filter((p: any) => p.status === 'submitted' && p.assignedTo === user.uid).length.toString(), description: "Targets requiring clearance", icon: Search, delay: 0.3 },
+        { title: "Personnel", value: "12", description: "High-trust agents deployed", icon: Users, delay: 0.4 },
+    ];
+
+    const currentStats = isClient ? clientStats : freelancerStats;
+
+    return (
+        <DashboardLayout>
+            <div className="space-y-10 max-w-[1200px] mx-auto py-6 px-4 sm:px-8">
+                {/* Header */}
+                <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-8">
+                    <div className="space-y-4">
+                        <motion.div 
+                            initial={{ opacity: 0, x: -20 }}
+                            animate={{ opacity: 1, x: 0 }}
+                            className="flex items-center gap-3 px-4 py-2 bg-primary/10 rounded-full border border-primary/20 w-fit"
+                        >
+                            <Zap className="h-4 w-4 text-primary" />
+                            <span className="text-[10px] font-black uppercase tracking-widest text-primary">System Online: {user.role} Authorization</span>
+                        </motion.div>
+                        <motion.h1 
+                            initial={{ opacity: 0, y: 10 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ delay: 0.1 }}
+                            className="text-4xl sm:text-6xl font-black text-white tracking-tighter"
+                        >
+                            {isClient ? 'Strategic' : 'Operational'} <span className="text-primary italic">Intelligence</span>
+                        </motion.h1>
+                        
+                        {user.maintenanceFeeDue > 0 && (
+                            <motion.div 
+                                initial={{ opacity: 0, x: -20 }}
+                                animate={{ opacity: 1, x: 0 }}
+                                className="mt-4 p-4 bg-red-500/10 border border-red-500/20 rounded-2xl flex items-center gap-4 group"
+                            >
+                                <div className="h-10 w-10 rounded-xl bg-red-500/20 flex items-center justify-center shrink-0">
+                                    <Lock className="h-5 w-5 text-red-500 group-hover:animate-bounce" />
+                                </div>
+                                <div>
+                                    <p className="text-red-500 font-black uppercase tracking-widest text-[10px]">Registry Alert: Maintenance Fee Required</p>
+                                    <p className="text-sm text-white/70 font-medium">Clear your maintenance fee of <span className="text-white font-bold">£{Number(user.maintenanceFeeDue || 0).toLocaleString()}</span> to ensure uninterrupted terminal access.</p>
+                                </div>
+                                <Button size="sm" className="ml-auto bg-red-500 hover:bg-red-600 text-white font-bold rounded-xl h-9">
+                                    Clear Fee
+                                </Button>
+                            </motion.div>
+                        )}
+
+                        <motion.p 
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            transition={{ delay: 0.2 }}
+                            className="text-muted-foreground font-medium max-w-xl"
+                        >
+                            {isClient 
+                                ? `Welcome, Director ${user.fullName}. Your oversight portal is initialized. Review mission pools and budget allocation.`
+                                : `Welcome back, agent ${user.fullName}. Your secondary encryption terminal is active. All dispatches synchronized.`}
+                        </motion.p>
+                    </div>
+
+                    <div className="flex flex-col items-end gap-6">
+                        <RealTimeStatus role={user.role === 'Client' ? 'Client' : 'Freelancer'} userId={user.uid} />
+                        <motion.div 
+                            initial={{ opacity: 0, scale: 0.95 }}
+                            animate={{ opacity: 1, scale: 1 }}
+                            className="flex items-center space-x-6 p-6 bg-white/[0.03] backdrop-blur-3xl rounded-[2.5rem] border border-white/10 shadow-2xl group hover:border-primary/30 transition-all duration-500"
+                        >
+                        <div className="relative">
+                            <Avatar className="h-16 w-16 border-2 border-white/5 ring-1 ring-white/10 relative overflow-hidden group/avatar cursor-pointer rounded-2xl transition-all">
+                                <AvatarImage src={user.profilePhoto} className="object-cover" />
+                                <AvatarFallback className="bg-primary/20 text-primary font-black uppercase">{getInitials(user.fullName)}</AvatarFallback>
+                                <Label htmlFor="quick-photo-upload" className="absolute inset-0 bg-black/60 opacity-0 group-hover/avatar:opacity-100 transition-opacity flex flex-col items-center justify-center cursor-pointer backdrop-blur-sm">
+                                    <Upload className="h-5 w-5 text-primary" />
+                                    <span className="text-[9px] font-black uppercase text-primary mt-1">Sync</span>
+                                </Label>
+                                <span className={cn(
+                                    "absolute bottom-0 right-0 h-4 w-4 rounded-full border-2 border-background z-10",
+                                    user.isOnline ? "bg-green-500 shadow-[0_0_10px_rgba(34,197,94,0.8)]" : "bg-zinc-600"
+                                )}></span>
+                            </Avatar>
+                            <Input id="quick-photo-upload" type="file" className="hidden" onChange={handlePhotoUpload} accept="image/*" />
+                        </div>
+                        <div>
+                            <p className="font-black text-2xl text-white tracking-tighter">{user.fullName}</p>
+                            <div className="flex flex-wrap gap-2 mt-2">
+                                <Badge variant="outline" className="text-[10px] uppercase font-black border-white/5 bg-white/5 text-muted-foreground/60 h-6 px-3 rounded-full">
+                                    Id: {user.averpayId}
+                                </Badge>
+                                <Badge variant="outline" className="text-[10px] flex items-center gap-1.5 border-white/5 bg-white/5 text-muted-foreground/60 h-6 px-3 rounded-full">
+                                    <MapPin className="h-3 w-3" />
+                                    {user.location || 'Global'}
+                                </Badge>
+                            </div>
+                        </div>
+                    </motion.div>
+                </div>
+            </div>
+
+            {/* Primary Stats Grid */}
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                    {currentStats.map((stat, i) => (
+                        <StatCard 
+                            key={i}
+                            title={stat.title} 
+                            value={stat.value}
+                            description={stat.description}
+                            icon={stat.icon as any}
+                            trend={stat.trend}
+                            delay={stat.delay}
+                        />
+                    ))}
+                </div>
+
+                {/* Analytics Section */}
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                    {/* Main Chart */}
+                    <motion.div 
+                        initial={{ opacity: 0, scale: 0.98 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        transition={{ delay: 0.5 }}
+                        className="lg:col-span-2"
+                    >
+                        <Card className="p-10 bg-card border-white/[0.04] rounded-[3rem] shadow-2xl relative overflow-hidden border-t-primary/20 border-t-4 transition-all duration-700">
+                            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-12 gap-4">
+                                <div>
+                                    <h3 className="text-3xl font-black text-white mb-2 tracking-tighter">{isClient ? 'Budget Utilization' : 'Capital Projection'}</h3>
+                                    <p className="text-[10px] uppercase font-black tracking-[0.3em] text-muted-foreground/40">{isClient ? 'Monthly expenditure logs' : 'Historical earnings intelligence'} (6 months)</p>
+                                </div>
+                                <div className="flex items-center gap-4">
+                                    <div className="flex items-center gap-2 px-4 py-2 bg-white/[0.03] rounded-2xl border border-white/5">
+                                        <div className="h-2 w-2 rounded-full bg-primary shadow-[0_0_8px_rgba(59,130,246,0.6)]" />
+                                        <span className="text-[10px] font-black text-white/50 uppercase tracking-[0.1em]">{isClient ? 'Spend' : 'Revenue'}</span>
+                                    </div>
+                                    <Button variant="outline" size="sm" className="bg-white/5 border-white/10 rounded-xl h-10 text-[10px] font-black uppercase px-5 hover:bg-white/10 transition-all">
+                                        Download
+                                    </Button>
+                                </div>
+                            </div>
+                            
+                            <div className="h-[300px] w-full mt-4">
+                                <ResponsiveContainer width="100%" height="100%">
+                                    <AreaChart data={chartData}>
+                                        <defs>
+                                            <linearGradient id="colorEarnings" x1="0" y1="0" x2="0" y2="1">
+                                                <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3}/>
+                                                <stop offset="95%" stopColor="#3b82f6" stopOpacity={0}/>
+                                            </linearGradient>
+                                        </defs>
+                                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(255,255,255,0.05)" />
+                                        <XAxis 
+                                            dataKey="name" 
+                                            axisLine={false} 
+                                            tickLine={false} 
+                                            tick={{ fill: '#6b7280', fontSize: 10, fontWeight: 800 }}
+                                            dy={10}
+                                        />
+                                        <YAxis 
+                                            axisLine={false} 
+                                            tickLine={false} 
+                                            tick={{ fill: '#6b7280', fontSize: 10, fontWeight: 800 }}
+                                            tickFormatter={(value) => `£${value/1000}k`}
+                                        />
+                                        <Tooltip 
+                                            contentStyle={{ 
+                                                backgroundColor: '#0a1633', 
+                                                borderColor: 'rgba(255,255,255,0.1)', 
+                                                borderRadius: '1rem',
+                                                fontSize: '12px',
+                                                color: '#fff'
+                                            }}
+                                            itemStyle={{ color: '#3b82f6' }}
+                                        />
+                                        <Area 
+                                            type="monotone" 
+                                            dataKey="earnings" 
+                                            stroke="#3b82f6" 
+                                            strokeWidth={4}
+                                            fillOpacity={1} 
+                                            fill="url(#colorEarnings)" 
+                                            animationDuration={2000}
+                                        />
+                                    </AreaChart>
+                                </ResponsiveContainer>
+                            </div>
+                        </Card>
+                    </motion.div>
+
+                    {/* Operational Timeline */}
+                    <motion.div 
+                        initial={{ opacity: 0, x: 20 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        transition={{ delay: 0.6 }}
+                    >
+                        <Card className="p-10 bg-card border-white/[0.04] rounded-[3rem] shadow-2xl h-full border-t-primary/20 border-t-4">
+                            <h3 className="text-2xl font-black text-white mb-8 tracking-tighter">{isClient ? 'Strategic Lifecycle' : 'Operational Timeline'}</h3>
+                            <div className="space-y-10 relative">
+                                <div className="absolute left-[19px] top-2 bottom-2 w-px bg-white/5" />
+                                
+                                {[
+                                    { status: isClient ? 'Op-Brief Issued' : 'Brief Assigned', icon: Briefcase, color: 'text-primary', active: true },
+                                    { status: isClient ? 'Personnel Working' : 'In Development', icon: Activity, color: 'text-blue-400', active: true },
+                                    { status: isClient ? 'Draft Clearance' : 'Strategic Review', icon: Eye, color: 'text-yellow-400', active: stats.active > 0 },
+                                    { status: isClient ? 'Capital Handover' : 'Funds Dispatch', icon: CheckCircle2, color: 'text-green-500', active: stats.completed > 0 },
+                                ].map((step, idx) => (
+                                    <div key={idx} className={`flex items-start gap-6 relative z-10 transition-all duration-500 ${step.active ? 'opacity-100' : 'opacity-20 translate-x-2'}`}>
+                                        <div className={`h-10 w-10 rounded-[1rem] flex items-center justify-center border shadow-xl ${step.active ? 'bg-primary/10 border-primary/40 shadow-primary/5' : 'bg-white/5 border-white/5'}`}>
+                                            <step.icon className={`h-4 w-4 ${step.active ? step.color : 'text-muted-foreground'}`} />
+                                        </div>
+                                        <div className="space-y-1.5 pt-1">
+                                            <p className={`text-[11px] font-black uppercase tracking-[0.2em] ${step.active ? 'text-white' : 'text-muted-foreground'}`}>{step.status}</p>
+                                            <p className="text-[10px] text-muted-foreground/60 font-bold">
+                                                {step.active ? 'Protocol currently in this phase.' : 'Awaiting mission progress...'}
+                                            </p>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                            
+                            <div className="mt-14 p-8 rounded-[2rem] bg-primary/[0.02] border border-primary/10 shadow-inner">
+                                <p className="text-[9px] font-black text-primary uppercase tracking-[0.3em] mb-3">{isClient ? 'Strategic Milestone' : 'Next Milestone'}</p>
+                                <p className="text-sm text-white/90 font-black italic tracking-tight">{isClient ? 'Review final quarterly budget efficiency.' : 'Verify final build outputs before auditing deadline-alpha.'}</p>
+                            </div>
+                        </Card>
+                    </motion.div>
+                </div>
+
+                {/* Info Footer */}
+                <motion.div 
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    transition={{ delay: 0.8 }}
+                    className="p-8 bg-primary/5 border border-primary/10 rounded-[3rem] flex flex-col md:flex-row items-center gap-8 shadow-inner shadow-primary/10"
+                >
+                    <div className="h-20 w-20 bg-primary/10 rounded-[2rem] flex items-center justify-center shrink-0 border border-primary/20">
+                        {isClient ? <BarChart3 className="h-10 w-10 text-primary" /> : <TrendingUp className="h-10 w-10 text-primary" />}
+                    </div>
+                    <div className="flex-1 text-center md:text-left space-y-2">
+                        <p className="text-xl text-white font-black italic">{isClient ? 'Director Insights: Resource Optimality' : 'Strategic Tip: Increase your Submission Velocity'}</p>
+                        <p className="text-sm text-muted-foreground font-medium leading-relaxed">
+                            {isClient 
+                                ? 'Directors who maintain a 90% deployment rate see a 22% increase in operational ROI. Review current pending briefs for bottleneck detection.'
+                                : 'Agents who submit mission data 48 hours before the protocol deadline experience a 15% reduction in auditing latency. Maximize your liquid asset turnover by optimizing your operational timeline.'}
+                        </p>
+                    </div>
+                    <Button asChild className="bg-primary text-black font-black uppercase tracking-widest rounded-2xl px-10 h-14 hover:bg-primary/90 shadow-lg shadow-primary/20 w-fit">
+                        <Link href="/dashboard/projects">{isClient ? 'Manage Operations' : 'Claim New Mission'}</Link>
+                    </Button>
+                </motion.div>
+            </div>
+        </DashboardLayout>
+    );
 }

@@ -36,34 +36,44 @@
   }
  
   .dark {
-    --background: 222 70% 10%;
+    --background: 222 47% 4%;
     --foreground: 210 40% 98%;
-    --card: 222 70% 15%;
+    --card: 222 47% 6%;
     --card-foreground: 210 40% 98%;
-    --popover: 222 70% 15%;
+    --popover: 222 47% 6%;
     --popover-foreground: 210 40% 98%;
     --primary: 217 91% 60%;
     --primary-foreground: 210 40% 98%;
-    --secondary: 217 33% 25%;
+    --secondary: 222 47% 12%;
     --secondary-foreground: 210 40% 98%;
-    --muted: 217 33% 25%;
+    --muted: 222 47% 12%;
     --muted-foreground: 215 20% 65%;
     --accent: 217 91% 60%;
     --accent-foreground: 210 40% 98%;
     --destructive: 0 63% 31%;
     --destructive-foreground: 210 40% 98%;
-    --border: 217 33% 25%;
-    --input: 217 33% 25%;
+    --border: 222 47% 12%;
+    --input: 222 47% 12%;
     --ring: 217 91% 60%;
   }
 }
 
 @layer base {
   * {
-    @apply border-border;
+    @apply border-border/50;
   }
   body {
-    @apply bg-background text-foreground;
+    @apply bg-background text-foreground selection:bg-primary/30 selection:text-white;
+  }
+}
+
+@layer components {
+  .glass-card {
+    @apply bg-white/[0.03] backdrop-blur-xl border border-white/10 shadow-2xl;
+  }
+  
+  .bento-grid {
+    @apply grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6;
   }
 }
 

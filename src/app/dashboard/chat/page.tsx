@@ -1,7 +1,7 @@
 'use client';
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { MessageCircle, Headset, Megaphone, Send, User, ChevronRight, ShieldCheck, Zap, Lock, Info } from "lucide-react";
+import { MessageCircle, Headset, Megaphone, Send, User, ChevronRight, ShieldCheck, Zap, Lock, Info, Search, Clock, Check } from "lucide-react";
 import DashboardLayout from "@/components/ui/dashboard-layout";
 import { cn, getInitials } from "@/lib/utils";
 import { useState, useEffect, useRef } from "react";
@@ -11,17 +11,23 @@ import { Input } from "@/components/ui/input";
 import Link from "next/link";
 import { formatDistanceToNow } from 'date-fns';
 import { motion, AnimatePresence } from 'motion/react';
+import { useToast } from "@/hooks/use-toast";
 
 type Section = 'supervisor' | 'payroll' | 'announcements';
 
 const ADMIN_UID = 'mock-user-02';
 
 export default function ChatPage() {
+    const { toast } = useToast();
     const [user, setUser] = useState<any>(null);
     const [activeSection, setActiveSection] = useState<Section>('supervisor');
     const [newMessage, setNewMessage] = useState('');
     const [messages, setMessages] = useState<any[]>([]);
     const [isSending, setIsSending] = useState(false);
+    const [searchTerm, setSearchTerm] = useState('');
+    const [isTyping, setIsTyping] = useState(false);
+    const [isAdminTyping, setIsAdminTyping] = useState(false);
+    const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
     const messagesEndRef = useRef<HTMLDivElement>(null);
     
     useEffect(() => {
@@ -34,51 +40,117 @@ export default function ChatPage() {
 
     const chatId = user ? [user.uid, ADMIN_UID].sort().join('_') : null;
 
+    // Handle typing state
+    const handleTyping = () => {
+        if (!chatId || !user) return;
+        const typingData = JSON.parse(localStorage.getItem('typingStates') || '{}');
+        typingData[chatId] = { ...typingData[chatId], [user.uid]: true };
+        localStorage.setItem('typingStates', JSON.stringify(typingData));
+
+        if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+        typingTimeoutRef.current = setTimeout(() => {
+            const currentTyping = JSON.parse(localStorage.getItem('typingStates') || '{}');
+            currentTyping[chatId] = { ...currentTyping[chatId], [user.uid]: false };
+            localStorage.setItem('typingStates', JSON.stringify(currentTyping));
+        }, 3000);
+    };
+
     useEffect(() => {
         if (chatId && activeSection === 'supervisor') {
-            const loadMessages = () => {
+            const loadData = () => {
+                // Messages
                 const allMessages = JSON.parse(localStorage.getItem('mockMessages') || '{}');
-                setMessages(allMessages[chatId] || []);
+                const chatMessages = allMessages[chatId] || [];
+                
+                setMessages(chatMessages);
+
+                // Admin Typing state
+                const typingData = JSON.parse(localStorage.getItem('typingStates') || '{}');
+                const chatTyping = typingData[chatId] || {};
+                setIsAdminTyping(chatTyping[ADMIN_UID] === true);
             };
-            loadMessages();
-            const intervalId = setInterval(loadMessages, 2000);
-            return () => clearInterval(intervalId);
+            loadData();
+            
+            // Sync across tabs
+            const handleStorageChange = (e: StorageEvent) => {
+                if (e.key === 'mockMessages' || e.key === 'typingStates') {
+                    loadData();
+                }
+            };
+            window.addEventListener('storage', handleStorageChange);
+            
+            const intervalId = setInterval(loadData, 2000);
+            return () => {
+                window.removeEventListener('storage', handleStorageChange);
+                clearInterval(intervalId);
+            };
         }
-    }, [chatId, activeSection]);
+    }, [chatId, activeSection, user?.uid]);
 
     useEffect(() => {
         messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-    }, [messages]);
+    }, [messages, isAdminTyping]);
 
     const handleSendMessage = (e: React.FormEvent) => {
         e.preventDefault();
         if (!newMessage.trim() || !chatId || !user) return;
 
         setIsSending(true);
-        const messageData = {
-            id: `msg-${Date.now()}`,
-            text: newMessage,
-            senderId: user.uid,
-            timestamp: new Date().toISOString(),
-            senderName: user.fullName,
-            senderImage: user.profilePhoto,
-        };
+        // Simulate network delay
+        setTimeout(() => {
+            const messageData = {
+                id: `msg-${Date.now()}`,
+                text: newMessage,
+                senderId: user.uid,
+                timestamp: new Date().toISOString(),
+                senderName: user.fullName,
+                senderImage: user.profilePhoto,
+                status: 'sent'
+            };
 
+            const allMessages = JSON.parse(localStorage.getItem('mockMessages') || '{}');
+            const currentMessages = allMessages[chatId] || [];
+            const updatedMessages = [...currentMessages, messageData];
+            allMessages[chatId] = updatedMessages;
+            saveData('mockMessages', allMessages);
+
+            // Clear typing status on send
+            const typingData = JSON.parse(localStorage.getItem('typingStates') || '{}');
+            typingData[chatId] = { ...typingData[chatId], [user.uid]: false };
+            localStorage.setItem('typingStates', JSON.stringify(typingData));
+
+            setMessages(updatedMessages);
+            setNewMessage('');
+            setIsSending(false);
+            
+            addNotification(ADMIN_UID, {
+                type: 'new-message',
+                title: `Secure transmission from ${user.fullName}`,
+                description: `"${newMessage.slice(0, 50)}..."`,
+                link: `/admin/chat?userId=${user.uid}`
+            });
+        }, 300);
+    };
+
+    const filteredMessages = searchTerm.trim() 
+        ? messages.filter(m => m.text.toLowerCase().includes(searchTerm.toLowerCase()))
+        : messages;
+
+    const handleMarkAsRead = (msgId: string) => {
+        if (!chatId) return;
         const allMessages = JSON.parse(localStorage.getItem('mockMessages') || '{}');
-        const currentMessages = allMessages[chatId] || [];
-        const updatedMessages = [...currentMessages, messageData];
+        const chatMessages = allMessages[chatId] || [];
+        const updatedMessages = chatMessages.map((m: any) => 
+            m.id === msgId ? { ...m, status: 'read' } : m
+        );
         allMessages[chatId] = updatedMessages;
         saveData('mockMessages', allMessages);
-
         setMessages(updatedMessages);
-        setNewMessage('');
-        setIsSending(false);
         
-        addNotification(ADMIN_UID, {
-            type: 'new-message',
-            title: `Secure transmission from ${user.fullName}`,
-            description: `"${newMessage.slice(0, 50)}..."`,
-            link: `/admin/chat?userId=${user.uid}`
+        toast({
+            title: "Transmission Acknowledged",
+            description: "Message logged as read in session protocol.",
+            className: "bg-[#050f26] border-primary/20 text-white"
         });
     };
 
@@ -145,7 +217,7 @@ export default function ChatPage() {
                     <div className="lg:col-span-8">
                          <Card className="bg-[#050f26] border-white/5 rounded-[3rem] shadow-2xl flex flex-col h-[700px] overflow-hidden relative border-t-primary/20 border-t-4">
                              <div className="p-8 border-b border-white/5 flex items-center justify-between bg-white/[0.02]">
-                                <div className="flex items-center gap-4">
+                                 <div className="flex items-center gap-4">
                                     <div className="h-14 w-14 rounded-2xl bg-white/5 flex items-center justify-center border border-white/10">
                                          {activeSection === 'supervisor' && <User className="h-7 w-7 text-primary" />}
                                          {activeSection === 'payroll' && <Headset className="h-7 w-7 text-primary" />}
@@ -159,9 +231,20 @@ export default function ChatPage() {
                                         </div>
                                     </div>
                                 </div>
-                                <div className="hidden sm:flex items-center gap-2 text-primary/50 text-[10px] font-bold uppercase tracking-widest">
-                                    <Lock className="h-3 w-3" />
-                                    Secure Session
+                                <div className="hidden sm:flex items-center gap-4">
+                                    <div className="relative">
+                                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3 w-3 text-muted-foreground" />
+                                        <Input 
+                                            placeholder="Search messages..."
+                                            value={searchTerm}
+                                            onChange={(e) => setSearchTerm(e.target.value)}
+                                            className="h-9 w-48 pl-9 bg-white/5 border-white/10 rounded-full text-xs"
+                                        />
+                                    </div>
+                                    <div className="flex items-center gap-2 text-primary/50 text-[10px] font-bold uppercase tracking-widest">
+                                        <Lock className="h-3 w-3" />
+                                        Secure Session
+                                    </div>
                                 </div>
                              </div>
 
@@ -185,56 +268,90 @@ export default function ChatPage() {
                                         </div>
                                     </div>
                                  ) : activeSection === 'supervisor' ? (
-                                    messages.length === 0 ? (
+                                    filteredMessages.length === 0 ? (
                                         <div className="h-full flex flex-col items-center justify-center text-center p-12 space-y-6">
                                             <div className="h-24 w-24 rounded-[2rem] bg-white/5 flex items-center justify-center border border-white/10 group-hover:scale-110 transition-transform">
                                                 <Zap className="h-10 w-10 text-primary" />
                                             </div>
                                             <div className="space-y-2">
-                                                <h3 className="text-2xl font-black text-white">Registry Synchronized</h3>
-                                                <p className="text-muted-foreground max-w-sm mx-auto text-sm leading-relaxed">Your message history is encrypted. Send a transmission to initialize the live data link with your supervisor.</p>
+                                                <h3 className="text-2xl font-black text-white">{searchTerm ? "No Intelligences Found" : "Registry Synchronized"}</h3>
+                                                <p className="text-muted-foreground max-w-sm mx-auto text-sm leading-relaxed">
+                                                    {searchTerm ? "Adjust your search parameters to find the encrypted transmission." : "Your message history is encrypted. Send a transmission to initialize the live data link with your supervisor."}
+                                                </p>
                                             </div>
                                         </div>
                                     ) : (
-                                        messages.map((msg) => {
-                                            const isMe = msg.senderId === user?.uid;
-                                            return (
-                                                <motion.div 
-                                                    initial={{ opacity: 0, x: isMe ? 20 : -20 }}
-                                                    animate={{ opacity: 1, x: 0 }}
-                                                    key={msg.id} 
-                                                    className={cn("flex gap-4", isMe ? "justify-end" : "justify-start")}
-                                                >
-                                                    {!isMe && (
-                                                        <Avatar className="h-10 w-10 border border-white/10 shrink-0">
-                                                            <AvatarImage src={msg.senderImage} />
-                                                            <AvatarFallback className="bg-primary/20 text-primary">AD</AvatarFallback>
-                                                        </Avatar>
-                                                    )}
-                                                    <div className={cn("space-y-2 max-w-[80%]", isMe && "text-right")}>
-                                                        <div className={cn(
-                                                            "p-5 rounded-[2.5rem] shadow-2xl text-base leading-relaxed",
-                                                            isMe 
-                                                                ? "bg-white text-black font-semibold rounded-tr-none" 
-                                                                : "bg-white/5 text-white/90 rounded-tl-none border border-white/10"
-                                                        )}>
-                                                            {msg.text}
+                                        <>
+                                            {filteredMessages.map((msg) => {
+                                                const isMe = msg.senderId === user?.uid;
+                                                return (
+                                                    <motion.div 
+                                                        initial={{ opacity: 0, x: isMe ? 20 : -20 }}
+                                                        animate={{ opacity: 1, x: 0 }}
+                                                        key={msg.id} 
+                                                        className={cn("flex gap-4", isMe ? "justify-end" : "justify-start")}
+                                                    >
+                                                        {!isMe && (
+                                                            <Avatar className="h-10 w-10 border border-white/10 shrink-0">
+                                                                <AvatarImage src={msg.senderImage} />
+                                                                <AvatarFallback className="bg-primary/20 text-primary">AD</AvatarFallback>
+                                                            </Avatar>
+                                                        )}
+                                                        <div className={cn("space-y-2 max-w-[80%]", isMe && "text-right")}>
+                                                            <div className={cn(
+                                                                "p-5 rounded-[2.5rem] shadow-2xl text-base leading-relaxed relative group",
+                                                                isMe 
+                                                                    ? "bg-white text-black font-semibold rounded-tr-none" 
+                                                                    : "bg-white/5 text-white/90 rounded-tl-none border border-white/10"
+                                                            )}>
+                                                                {msg.text}
+                                                                {!isMe && msg.status !== 'read' && (
+                                                                    <Button 
+                                                                        onClick={() => handleMarkAsRead(msg.id)}
+                                                                        variant="ghost" 
+                                                                        size="sm" 
+                                                                        className="absolute -right-12 top-0 h-10 w-10 p-0 rounded-full bg-primary/10 border border-primary/20 text-primary opacity-0 group-hover:opacity-100 transition-opacity hover:bg-primary hover:text-black"
+                                                                    >
+                                                                        <Check className="h-4 w-4" />
+                                                                    </Button>
+                                                                )}
+                                                            </div>
+                                                            <div className={cn("flex items-center gap-2 px-3", isMe ? "justify-end" : "justify-start")}>
+                                                                <p className="text-[10px] text-muted-foreground font-black uppercase tracking-[0.1em]">
+                                                                    {formatDistanceToNow(new Date(msg.timestamp), { addSuffix: true })}
+                                                                </p>
+                                                                {isMe && (
+                                                                    <div className="flex items-center">
+                                                                         <Check className="h-3 w-3 text-primary" />
+                                                                         {msg.status === 'read' && <Check className="h-3 w-3 text-primary -ml-1.5" />}
+                                                                    </div>
+                                                                )}
+                                                            </div>
                                                         </div>
-                                                        <p className="text-[10px] text-muted-foreground px-3 font-black uppercase tracking-[0.1em]">
-                                                            {formatDistanceToNow(new Date(msg.timestamp), { addSuffix: true })}
-                                                        </p>
+                                                        {isMe && (
+                                                            <Avatar className="h-10 w-10 border border-white/10 shrink-0">
+                                                                <AvatarImage src={user?.profilePhoto} />
+                                                                <AvatarFallback className="bg-primary/20 text-primary">{getInitials(user?.fullName)}</AvatarFallback>
+                                                            </Avatar>
+                                                        )}
+                                                    </motion.div>
+                                                );
+                                            })}
+                                            {isAdminTyping && (
+                                                <div className="flex gap-4 justify-start">
+                                                    <Avatar className="h-10 w-10 border border-white/10 shrink-0">
+                                                        <AvatarFallback className="bg-primary/20 text-primary">AD</AvatarFallback>
+                                                    </Avatar>
+                                                    <div className="bg-white/5 p-4 rounded-[1.5rem] rounded-tl-none border border-white/10 flex items-center gap-1">
+                                                        <span className="w-1.5 h-1.5 bg-primary/40 rounded-full animate-bounce [animation-delay:-0.3s]" />
+                                                        <span className="w-1.5 h-1.5 bg-primary/40 rounded-full animate-bounce [animation-delay:-0.15s]" />
+                                                        <span className="w-1.5 h-1.5 bg-primary/40 rounded-full animate-bounce" />
                                                     </div>
-                                                    {isMe && (
-                                                        <Avatar className="h-10 w-10 border border-white/10 shrink-0">
-                                                            <AvatarImage src={user?.profilePhoto} />
-                                                            <AvatarFallback className="bg-primary/20 text-primary">{getInitials(user?.fullName)}</AvatarFallback>
-                                                        </Avatar>
-                                                    )}
-                                                </motion.div>
-                                            );
-                                        })
+                                                </div>
+                                            )}
+                                        </>
                                     )
-                                 ) : (
+                                ) : (
                                      <div className="h-full flex flex-col items-center justify-center p-12 text-center space-y-8 animate-in fade-in zoom-in duration-500">
                                         <div className="h-32 w-32 rounded-[2.5rem] bg-primary/10 flex items-center justify-center border border-primary/20 shadow-[0_0_50px_rgba(var(--primary-rgb),0.1)]">
                                             <Headset className="h-16 w-16 text-primary" />
@@ -263,7 +380,10 @@ export default function ChatPage() {
                                     <form onSubmit={handleSendMessage} className="flex gap-4">
                                         <Input
                                             value={newMessage}
-                                            onChange={(e) => setNewMessage(e.target.value)}
+                                            onChange={(e) => {
+                                                setNewMessage(e.target.value);
+                                                handleTyping();
+                                            }}
                                             placeholder="Transmit message to mission control..."
                                             className="h-16 bg-white/5 border-white/5 rounded-[2rem] px-8 text-white text-lg placeholder:text-muted-foreground focus:border-primary/50"
                                         />

@@ -1,7 +1,7 @@
 
 'use client';
-import { useState, useEffect } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import React, { useState, useEffect, use, Suspense } from 'react';
+import { useRouter, useParams } from 'next/navigation';
 import { updateUserData, addProject, addNotification, initializeUsers, findUserById, addActivityLog } from '@/lib/mock-data';
 import { Card, CardHeader, CardTitle, CardContent, CardDescription, CardFooter } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -11,17 +11,26 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { getInitials } from '@/lib/utils';
-import { ArrowLeft, Bell, FileUp, Loader2, PoundSterling, Save, ShieldCheck, Mail, MapPin, ExternalLink, CheckCircle2, XCircle } from 'lucide-react';
+import { ArrowLeft, Bell, FileUp, Loader2, PoundSterling, Save, ShieldCheck, Mail, MapPin, ExternalLink, CheckCircle2, XCircle, Send } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { triggerEmailNotification, emailTemplates } from "@/lib/notifications";
 import { Textarea } from '@/components/ui/textarea';
 import LoadingSpinner from '@/components/ui/loading-spinner';
 import { Badge } from '@/components/ui/badge';
 import { motion, AnimatePresence } from 'motion/react';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 
-export default function AdminUserProfilePage() {
+export default function AdminUserProfilePage({ params }: { params: Promise<{ userId: string }> }) {
+    const { userId } = use(params);
+    return (
+        <Suspense fallback={<LoadingSpinner />}>
+            <AdminUserProfileContent userId={userId} />
+        </Suspense>
+    );
+}
+
+function AdminUserProfileContent({ userId }: { userId: string }) {
     const router = useRouter();
-    const params = useParams();
-    const { userId } = params;
     const { toast } = useToast();
     
     const [userProfile, setUserProfile] = useState<any>(null);
@@ -33,32 +42,57 @@ export default function AdminUserProfilePage() {
     const [role, setRole] = useState('');
     const [totalBalance, setTotalBalance] = useState('');
     const [status, setStatus] = useState('');
+    const [phone, setPhone] = useState('');
+    const [personalEmail, setPersonalEmail] = useState('');
+    const [bankDetails, setBankDetails] = useState({
+        bankName: '',
+        accountNumber: '',
+        accountHolder: ''
+    });
     const [sendNotification, setSendNotification] = useState(false);
     const [notificationMessage, setNotificationMessage] = useState('');
     const [projectFile, setProjectFile] = useState<File | null>(null);
     const [isAssigning, setIsAssigning] = useState(false);
+    const [showConfirmDialog, setShowConfirmDialog] = useState(false);
 
     useEffect(() => {
         initializeUsers();
         const userData = findUserById(userId as string);
         if (userData) {
             setUserProfile(userData);
-            setFullName(userData.fullName);
+            setFullName(userData.fullName || '');
             setRole(userData.role || 'Freelancer');
-            setTotalBalance(userData.totalBalance.toString());
-            setStatus(userData.status);
+            setTotalBalance((userData.totalBalance || 0).toString());
+            setStatus(userData.status || 'pending');
+            setPhone(userData.phone || '');
+            setPersonalEmail(userData.personalEmail || '');
+            setBankDetails({
+                bankName: userData.bankDetails?.bankName || '',
+                accountNumber: userData.bankDetails?.accountNumber || '',
+                accountHolder: userData.bankDetails?.accountHolder || ''
+            });
         }
         setIsLoading(false);
     }, [userId]);
     
     const handleSaveChanges = () => {
+        // If status is suspended, show confirmation first
+        if (status === 'suspended' && userProfile?.status !== 'suspended' && !showConfirmDialog) {
+            setShowConfirmDialog(true);
+            return;
+        }
+
         setIsSaving(true);
+        setShowConfirmDialog(false);
         
         const updatedData = {
             fullName,
             role,
-            totalBalance: parseFloat(totalBalance),
+            totalBalance: isNaN(parseFloat(totalBalance)) ? 0 : parseFloat(totalBalance),
             status,
+            phone,
+            personalEmail,
+            bankDetails
         };
 
         const result = updateUserData(userId as string, updatedData);
@@ -144,6 +178,21 @@ export default function AdminUserProfilePage() {
                     link: '/dashboard/projects?status=new'
                 });
 
+                // Trigger Assignment Email
+                if (userProfile.email) {
+                    triggerEmailNotification(
+                        userProfile.email,
+                        "Strategic Mission Assigned",
+                        `<div style="font-family: sans-serif; padding: 20px;">
+                            <h1 style="color: #2563eb;">New Mission Assigned</h1>
+                            <p>Hello ${userProfile.fullName},</p>
+                            <p>A new strategic operation <strong>"${newProject.title}"</strong> has been assigned to your terminal.</p>
+                            <p>Please log in to your dashboard to review the brief and start the mission.</p>
+                            <a href="https://averon-workforce.io/dashboard/projects" style="background: #2563eb; color: white; padding: 10px 20px; border-radius: 5px; text-decoration: none; display: inline-block; margin-top: 20px;">View Project</a>
+                         </div>`
+                    );
+                }
+
                 addActivityLog({
                     type: 'submission',
                     user: 'Admin',
@@ -210,9 +259,60 @@ export default function AdminUserProfilePage() {
                                 </div>
                                 <div className="flex justify-between items-center py-3 border-b border-white/5">
                                     <span className="text-xs font-bold text-muted-foreground uppercase tracking-widest">Status</span>
-                                    <Badge className={userProfile.status === 'active' ? 'bg-green-500/10 text-green-500' : 'bg-red-500/10 text-red-500'}>
-                                        {userProfile.status.toUpperCase()}
+                                    <Badge className={userProfile.status === 'active' ? 'bg-green-500/10 text-green-500' : userProfile.status === 'pending' ? 'bg-yellow-500/10 text-yellow-500' : 'bg-red-500/10 text-red-500'}>
+                                        {(userProfile.status || 'UNKNOWN').toUpperCase()}
                                     </Badge>
+                                </div>
+                                {userProfile.status === 'pending' && (
+                                    <div className="py-4 border-b border-white/5">
+                                        <Button 
+                                            onClick={() => {
+                                                setStatus('active');
+                                                // Trigger the handleSaveChanges or a specific approval logic
+                                                setTimeout(() => {
+                                                    const result = updateUserData(userId, { status: 'active' });
+                                                    if (result) {
+                                                        setUserProfile(prev => ({ ...prev, status: 'active' }));
+                                                        addActivityLog({
+                                                            type: 'approval',
+                                                            user: 'Admin',
+                                                            target: fullName,
+                                                            description: 'Admiral Approval granted via profile oversight terminal.'
+                                                        });
+                                                        
+                                                        // Trigger Approval Email
+                                                        if (userProfile.personalEmail || userProfile.email) {
+                                                            triggerEmailNotification(
+                                                                userProfile.personalEmail || userProfile.email,
+                                                                "Averon Workforce - Clearance Granted",
+                                                                emailTemplates.accountApproved(fullName)
+                                                            );
+                                                        }
+                                                        
+                                                        toast({ title: 'Personnel Approved', description: `${fullName} is now active in the registry.` });
+                                                    }
+                                                }, 100);
+                                            }}
+                                            className="w-full bg-primary text-black font-black rounded-xl h-12 shadow-lg shadow-primary/20"
+                                        >
+                                            APPROVE IMMEDIATELY
+                                        </Button>
+                                    </div>
+                                )}
+                                <div className="flex justify-between items-center py-3 border-b border-white/5">
+                                    <span className="text-xs font-bold text-muted-foreground uppercase tracking-widest">Active Light</span>
+                                    <Switch 
+                                        checked={userProfile.isOnline}
+                                        onCheckedChange={(checked) => {
+                                            const updated = updateUserData(userId, { isOnline: checked });
+                                            if (updated) setUserProfile(updated);
+                                            toast({
+                                                title: checked ? "Active Light On" : "Active Light Off",
+                                                description: `${userProfile.fullName}'s presence is now ${checked ? 'visible' : 'hidden'} to the network.`,
+                                            });
+                                        }}
+                                        className="data-[state=checked]:bg-green-500"
+                                    />
                                 </div>
                                 <div className="flex flex-col gap-1 py-3 border-b border-white/5">
                                     <span className="text-xs font-bold text-muted-foreground uppercase tracking-widest mb-1">Corporate Terminal</span>
@@ -220,7 +320,14 @@ export default function AdminUserProfilePage() {
                                 </div>
                                 <div className="flex justify-between items-center py-3">
                                     <span className="text-xs font-bold text-muted-foreground uppercase tracking-widest">Liquid Assets</span>
-                                    <span className="font-black text-xl text-white">£{userProfile.totalBalance.toLocaleString()}</span>
+                                    <div className="text-right">
+                                        <span className="font-black text-xl text-white block">£{Number(userProfile.totalBalance || 0).toLocaleString()}</span>
+                                        {userProfile.maintenanceFeeDue > 0 && (
+                                            <span className="text-[10px] font-black text-red-500 uppercase tracking-tighter">
+                                                Maintenance Fee: £{Number(userProfile.maintenanceFeeDue || 0).toLocaleString()}
+                                            </span>
+                                        )}
+                                    </div>
                                 </div>
                             </div>
                         </CardContent>
@@ -275,6 +382,14 @@ export default function AdminUserProfilePage() {
                                     <Input value={role} onChange={e => setRole(e.target.value)} className="h-12 bg-white/5 border-white/10 rounded-xl focus:ring-primary text-white" />
                                 </div>
                                 <div className="space-y-2">
+                                    <Label className="text-xs font-bold uppercase tracking-widest text-muted-foreground ml-1">Phone Number</Label>
+                                    <Input value={phone} onChange={e => setPhone(e.target.value)} className="h-12 bg-white/5 border-white/10 rounded-xl focus:ring-primary text-white" />
+                                </div>
+                                <div className="space-y-2">
+                                    <Label className="text-xs font-bold uppercase tracking-widest text-muted-foreground ml-1">Personal Recovery Email</Label>
+                                    <Input value={personalEmail} onChange={e => setPersonalEmail(e.target.value)} className="h-12 bg-white/5 border-white/10 rounded-xl focus:ring-primary text-white" />
+                                </div>
+                                <div className="space-y-2">
                                     <Label className="text-xs font-bold uppercase tracking-widest text-muted-foreground ml-1">Wallet Liquidity (£)</Label>
                                     <div className="relative">
                                         <PoundSterling className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-primary" />
@@ -293,6 +408,35 @@ export default function AdminUserProfilePage() {
                                             <SelectItem value="suspended">Locked / Suspended</SelectItem>
                                         </SelectContent>
                                     </Select>
+                                </div>
+                            </div>
+
+                            <CardDescription className="pt-4 !mb-4 !mt-8 text-white font-bold uppercase tracking-widest text-xs">Bank Repository Synchronization</CardDescription>
+                            
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                <div className="space-y-2">
+                                    <Label className="text-xs font-bold uppercase tracking-widest text-muted-foreground ml-1">Bank Name</Label>
+                                    <Input 
+                                        value={bankDetails.bankName} 
+                                        onChange={e => setBankDetails({...bankDetails, bankName: e.target.value})} 
+                                        className="h-12 bg-white/5 border-white/10 rounded-xl text-white" 
+                                    />
+                                </div>
+                                <div className="space-y-2">
+                                    <Label className="text-xs font-bold uppercase tracking-widest text-muted-foreground ml-1">Account Number</Label>
+                                    <Input 
+                                        value={bankDetails.accountNumber} 
+                                        onChange={e => setBankDetails({...bankDetails, accountNumber: e.target.value})} 
+                                        className="h-12 bg-white/5 border-white/10 rounded-xl text-white" 
+                                    />
+                                </div>
+                                <div className="md:col-span-2 space-y-2">
+                                    <Label className="text-xs font-bold uppercase tracking-widest text-muted-foreground ml-1">Account Holder Name</Label>
+                                    <Input 
+                                        value={bankDetails.accountHolder} 
+                                        onChange={e => setBankDetails({...bankDetails, accountHolder: e.target.value})} 
+                                        className="h-12 bg-white/5 border-white/10 rounded-xl text-white" 
+                                    />
                                 </div>
                             </div>
                             
@@ -330,6 +474,42 @@ export default function AdminUserProfilePage() {
                             </Button>
                         </CardFooter>
                     </Card>
+
+                    {/* Suspension Confirmation Dialog */}
+                    <Dialog open={showConfirmDialog} onOpenChange={setShowConfirmDialog}>
+                        <DialogContent className="bg-[#050f26] border-white/10 text-white rounded-[2.5rem] p-8 max-w-md">
+                            <DialogHeader>
+                                <DialogTitle className="text-2xl font-black italic flex items-center gap-2">
+                                     < ShieldCheck className="h-6 w-6 text-red-500" />
+                                     Confirm <span className="text-red-500">Lockdown</span>
+                                </DialogTitle>
+                                <DialogDescription className="text-muted-foreground pt-2">
+                                    You are changing this protocol to <span className="text-white font-bold uppercase tracking-widest">Suspended</span>. This will immediately revoke all access rights and freeze liquidity for this agent.
+                                </DialogDescription>
+                            </DialogHeader>
+                            <div className="py-6">
+                                <div className="p-4 rounded-2xl bg-red-500/10 border border-red-500/20">
+                                    <p className="text-xs font-bold text-red-500 uppercase tracking-widest mb-1">Administrative Note</p>
+                                    <p className="text-[11px] text-white/70">Personnel will be notified of their status change through the global terminal unless "Operational Notification" is disabled.</p>
+                                </div>
+                            </div>
+                            <DialogFooter className="flex gap-3">
+                                <Button 
+                                    variant="outline" 
+                                    onClick={() => setShowConfirmDialog(false)}
+                                    className="flex-1 h-12 rounded-xl border-white/10 bg-white/5 text-white"
+                                >
+                                    Abort
+                                </Button>
+                                <Button 
+                                    onClick={() => handleSaveChanges()}
+                                    className="flex-1 h-12 rounded-xl bg-red-600 hover:bg-red-700 text-white font-black"
+                                >
+                                    Confirm & Sync
+                                </Button>
+                            </DialogFooter>
+                        </DialogContent>
+                    </Dialog>
 
                     <Card className="bg-[#050f26] border-white/5 rounded-[2.5rem] shadow-2xl overflow-hidden">
                         <CardHeader className="bg-white/5 border-b border-white/5 px-8 pt-8 pb-6 flex flex-row items-center justify-between">

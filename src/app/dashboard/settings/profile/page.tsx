@@ -15,9 +15,10 @@ import { z } from "zod";
 import { Form, FormControl, FormField, FormItem, FormMessage } from "@/components/ui/form";
 import { getInitials } from "@/lib/utils";
 import { Skeleton } from "@/components/ui/skeleton";
-import { updateUserData, initializeUsers, saveData } from "@/lib/mock-data";
+import { updateUserData, initializeUsers, saveData, addActivityLog } from "@/lib/mock-data";
 import { useRouter } from "next/navigation";
 import LoadingSpinner from "@/components/ui/loading-spinner";
+import { triggerEmailNotification, emailTemplates } from "@/lib/notifications";
 
 
 const profileFormSchema = z.object({
@@ -63,25 +64,30 @@ export default function ProfileSettingsPage() {
     initializeUsers();
     const storedUserRaw = localStorage.getItem('loggedInUser');
     if (storedUserRaw) {
-        const freshUserProfile = JSON.parse(storedUserRaw);
-        setUserProfile(freshUserProfile);
-        if (freshUserProfile) {
-            form.reset({
-                fullName: freshUserProfile.fullName || '',
-                personalEmail: freshUserProfile.personalEmail || '',
-                phone: freshUserProfile.phone || '',
-                bankDetails: {
-                    bankName: freshUserProfile.bankDetails?.bankName || '',
-                    accountHolder: freshUserProfile.bankDetails?.accountHolder || '',
-                    accountNumber: freshUserProfile.bankDetails?.accountNumber || '',
-                }
-            });
+        try {
+            const freshUserProfile = JSON.parse(storedUserRaw);
+            setUserProfile(freshUserProfile);
+            if (freshUserProfile) {
+                form.reset({
+                    fullName: freshUserProfile.fullName || '',
+                    personalEmail: freshUserProfile.personalEmail || '',
+                    phone: freshUserProfile.phone || '',
+                    bankDetails: {
+                        bankName: freshUserProfile.bankDetails?.bankName || '',
+                        accountHolder: freshUserProfile.bankDetails?.accountHolder || '',
+                        accountNumber: freshUserProfile.bankDetails?.accountNumber || '',
+                    }
+                });
+            }
+        } catch (e) {
+            console.error("Auth hydration error", e);
+            router.push('/login');
         }
     } else {
         router.push('/login');
     }
     setIsPageLoading(false);
-  }, [form, router]);
+  }, []); // Run once on mount to initialize form values
   
   // Watch fullName field to auto-update accountHolder
   const watchedFullName = form.watch("fullName");
@@ -103,6 +109,16 @@ export default function ProfileSettingsPage() {
 
         if (wasProfileIncomplete && values.bankDetails?.bankName) {
             setIsFinishingSetup(true);
+            
+            // Send email notification for important update
+            if (userProfile.email) {
+                await triggerEmailNotification(
+                    userProfile.email,
+                    "AverPay Profile Update Confirmation",
+                    emailTemplates.profileUpdate(userProfile.fullName)
+                );
+            }
+
             await new Promise(resolve => setTimeout(resolve, 2000));
             toast({
                 title: "Bank Details Saved!",
@@ -110,6 +126,15 @@ export default function ProfileSettingsPage() {
             });
             router.push('/dashboard/settings/verification');
         } else {
+            // Also send for regular updates
+            if (userProfile.email) {
+                triggerEmailNotification(
+                    userProfile.email,
+                    "AverPay Profile Update Confirmation",
+                    emailTemplates.profileUpdate(userProfile.fullName)
+                );
+            }
+
             toast({
                 title: "Profile Updated",
                 description: "Your profile details have been saved successfully.",
@@ -147,9 +172,16 @@ export default function ProfileSettingsPage() {
             setUserProfile(updatedUser);
             saveData('loggedInUser', updatedUser);
 
+            addActivityLog({
+                type: 'profile_update',
+                user: userProfile.fullName,
+                target: 'Registry',
+                description: `Updated profile identification photo.`
+            });
+
             toast({
                 title: 'Photo Uploaded',
-                description: `Your profile photo has been updated.`,
+                description: `Your profile photo has been updated and synchronized with the registry.`,
             });
         };
         reader.readAsDataURL(file);
@@ -206,19 +238,22 @@ export default function ProfileSettingsPage() {
             <CardContent>
                 <Form {...form}>
                     <form className="space-y-6" onSubmit={form.handleSubmit(handleProfileUpdate)}>
-                        <div className="flex items-center gap-4">
-                           <Avatar className="h-20 w-20">
-                                <AvatarImage src={userProfile?.profilePhoto} alt={userProfile?.fullName} />
-                                <AvatarFallback>{getInitials(userProfile?.fullName || userProfile?.email || 'U')}</AvatarFallback>
-                            </Avatar>
-                            <div>
-                                 <Label htmlFor="photo-upload" className="cursor-pointer inline-flex items-center justify-center rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 border border-input bg-background hover:bg-accent hover:text-accent-foreground h-10 px-4 py-2">
-                                    <Upload className="mr-2 h-4 w-4" />
-                                    Upload Photo
-                                </Label>
-                                <Input id="photo-upload" type="file" className="hidden" onChange={handleFileUpload} accept="image/jpeg,image/png" />
-                                <p className="text-xs text-muted-foreground mt-2">PNG, JPG up to 5MB.</p>
+                        <div className="flex flex-col items-center justify-center space-y-4 py-6 border-b border-white/5">
+                           <div className="relative group">
+                                <Avatar className="h-32 w-32 border-4 border-primary/20 shadow-2xl transition-transform group-hover:scale-105 duration-500">
+                                     <AvatarImage src={userProfile?.profilePhoto} alt={userProfile?.fullName} className="object-cover" />
+                                     <AvatarFallback className="text-3xl bg-secondary font-black">{getInitials(userProfile?.fullName || userProfile?.email || 'U')}</AvatarFallback>
+                                 </Avatar>
+                                 <Label htmlFor="photo-upload" className="absolute inset-0 flex flex-col items-center justify-center bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity rounded-full cursor-pointer overflow-hidden">
+                                     <Upload className="h-8 w-8 text-primary mb-1 animate-bounce" />
+                                     <span className="text-[10px] font-black text-white uppercase tracking-widest">Update</span>
+                                 </Label>
                             </div>
+                            <div className="text-center">
+                                 <h3 className="text-lg font-black italic">{userProfile?.fullName}</h3>
+                                 <p className="text-[10px] text-primary font-black uppercase tracking-[0.2em]">{userProfile?.averpayId}</p>
+                            </div>
+                            <Input id="photo-upload" type="file" className="hidden" onChange={handleFileUpload} accept="image/jpeg,image/png" />
                         </div>
 
                         <FormField

