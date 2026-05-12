@@ -1,34 +1,35 @@
 
 'use client';
 import { useState } from 'react';
-import { Facebook, Twitter, Instagram, Linkedin, Loader2, WifiOff } from 'lucide-react';
+import { Facebook, Twitter, Instagram, Linkedin, Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import Link from 'next/link';
 
 const socialLinks = [
-  { name: 'Facebook', icon: Facebook },
-  { name: 'Twitter', icon: Twitter },
-  { name: 'Instagram', icon: Instagram },
-  { name: 'LinkedIn', icon: Linkedin },
+  { name: 'Facebook', icon: Facebook, url: 'https://facebook.com/averonworkforce' },
+  { name: 'Twitter', icon: Twitter, url: 'https://twitter.com/averonworkforce' },
+  { name: 'Instagram', icon: Instagram, url: 'https://instagram.com/averonworkforce' },
+  { name: 'LinkedIn', icon: Linkedin, url: 'https://linkedin.com/company/averonworkforce' },
 ];
 
 export default function Footer() {
   const { toast } = useToast();
   const [loading, setLoading] = useState<string | null>(null);
 
-  const handleSocialClick = (socialName: string) => {
+  const handleSocialClick = (socialName: string, url: string) => {
     setLoading(socialName);
-
+    
+    // Open social link in new tab
+    window.open(url, '_blank', 'noopener,noreferrer');
+    
     setTimeout(() => {
       setLoading(null);
       toast({
-        variant: 'destructive',
-        title: 'Connection Error',
-        description: `Could not connect to social network. Please try again later.`,
-        
+        title: 'Opening Social Media',
+        description: `Redirecting you to our ${socialName} page...`,
       });
-    }, 2000);
+    }, 500);
   };
 
   return (
@@ -38,21 +39,22 @@ export default function Footer() {
           <p>&copy; {new Date().getFullYear()} Averon Workforce. All rights reserved.</p>
           
           <div className="flex items-center gap-4">
-             <Link href="/terms-of-service" className="hover:text-foreground">Terms of Service</Link>
-             <Link href="/privacy-policy" className="hover:text-foreground">Privacy Policy</Link>
+             <Link href="/terms-of-service" className="hover:text-foreground transition-colors">Terms of Service</Link>
+             <Link href="/privacy-policy" className="hover:text-foreground transition-colors">Privacy Policy</Link>
           </div>
           
           <div className="flex items-center gap-4">
             {socialLinks.map((social) => (
               <button
                 key={social.name}
-                onClick={() => handleSocialClick(social.name)}
+                onClick={() => handleSocialClick(social.name, social.url)}
                 disabled={!!loading}
                 className={cn(
                   "text-muted-foreground hover:text-primary transition-colors",
                   loading && "cursor-not-allowed opacity-50"
                 )}
                 aria-label={`Visit our ${social.name} page`}
+                type="button"
               >
                 {loading === social.name ? (
                   <Loader2 className="h-5 w-5 animate-spin" />
@@ -64,6 +66,6 @@ export default function Footer() {
           </div>
         </div>
       </div>
-    </footer>
-  );
+     </footer>
+   );
 }
