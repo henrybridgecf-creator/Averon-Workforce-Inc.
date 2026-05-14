@@ -6,6 +6,8 @@ export interface User {
   role: 'admin' | 'user';
   status: 'active' | 'inactive';
   balance: number;
+  totalEarnings?: number;
+  isEmailVerified?: boolean;
   location?: {
     latitude: number;
     longitude: number;
@@ -16,6 +18,7 @@ export interface User {
   averpayId: string;
   createdAt: number;
   updatedAt: number;
+  projectsAssigned?: string[];
 }
 
 export interface Project {
@@ -37,6 +40,7 @@ export interface Project {
 export interface Chat {
   id: string;
   participants: string[];
+  participantNames: string[];
   messages: Message[];
   createdAt: number;
   updatedAt: number;
@@ -79,4 +83,13 @@ export interface Notification {
   relatedEntityId?: string;
   relatedEntityType?: 'project' | 'withdrawal' | 'message';
   createdAt: number;
+}
+
+export interface AdminStats {
+  totalUsers: number;
+  activeUsers: number;
+  totalEarningsPaid: number;
+  pendingWithdrawals: number;
+  activeProjects: number;
+  completedProjects: number;
 }
