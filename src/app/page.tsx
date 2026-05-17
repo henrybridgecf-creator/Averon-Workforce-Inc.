@@ -1,176 +1,171 @@
-
-'use client';
-import { Button } from "@/components/ui/button";
-import { Box, MessageSquare, LineChart, DollarSign, ShieldCheck, Wallet, Zap, ArrowRight, Globe, Users, Clock } from "lucide-react";
-import Link from "next/link";
-
-const features = [
-  {
-    icon: Box,
-    title: "Project Management",
-    description: "Accept or reject projects with ease. View project details, deadlines, and requirements all in one place.",
-  },
-  {
-    icon: MessageSquare,
-    title: "Direct Communication",
-    description: "Communicate directly with Averon Workforce management. Get project updates and announcements instantly.",
-  },
-  {
-    icon: LineChart,
-    title: "Earnings Tracking",
-    description: "Track your earnings in real-time. View payment history, pending payments, and total earnings.",
-  },
-  {
-    icon: DollarSign,
-    title: "Secure Withdrawals",
-    description: "Withdraw your funds securely when you're ready. Simple, fast, and reliable payment processing.",
-  },
-  {
-    icon: ShieldCheck,
-    title: "Team Member Exclusive",
-    description: "Designed exclusively for Averon Workforce team members with secure access and personalized experience.",
-  },
-  {
-    icon: Wallet,
-    title: "All-in-One Platform",
-    description: "Everything you need for your freelance career with Averon Workforce in one convenient, easy-to-use platform."
-  }
-];
-
-const stats = [
-  { label: "Team Members", value: "5,000+" },
-  { label: "Paid Out", value: "$2M+" },
-  { label: "Uptime", value: "99.9%" },
-  { label: "Countries", value: "50+" },
-];
+import { Button } from '@/components/ui/button';
+import Link from 'next/link';
+import { ArrowRight, Zap } from 'lucide-react';
 
 export default function HomePage() {
+  const features = [
+    {
+      icon: '📦',
+      title: 'Project Management',
+      description: 'Accept or reject projects with ease. View details and deadlines.',
+    },
+    {
+      icon: '💬',
+      title: 'Direct Communication',
+      description: 'Chat directly with supervisors. Get instant updates.',
+    },
+    {
+      icon: '📊',
+      title: 'Earnings Tracking',
+      description: 'Monitor your earnings in real-time. View payment history.',
+    },
+    {
+      icon: '🔒',
+      title: 'Secure Withdrawals',
+      description: 'Request withdrawals safely. Admin approves and processes.',
+    },
+    {
+      icon: '👥',
+      title: 'Team Exclusive',
+      description: 'Designed for Averon Workforce team members only.',
+    },
+    {
+      icon: '⚡',
+      title: 'All-in-One',
+      description: 'Everything you need in one convenient platform.',
+    },
+  ];
+
+  const stats = [
+    { label: 'Active Members', value: '5,000+' },
+    { label: 'Total Paid Out', value: '$2M+' },
+    { label: 'Uptime', value: '99.9%' },
+    { label: 'Countries', value: '50+' },
+  ];
+
   return (
-    <div className="bg-[#020817] text-foreground min-h-screen font-sans selection:bg-primary selection:text-primary-foreground">
-      <div className="relative overflow-hidden">
-        {/* Background Gradients */}
-        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full h-[600px] bg-gradient-to-b from-primary/10 to-transparent pointer-events-none" />
-        
-        <header className="relative z-10 py-6 px-6 md:px-12 flex justify-between items-center max-w-7xl mx-auto">
+    <div className="min-h-screen bg-[#020817] text-foreground selection:bg-primary selection:text-primary-foreground">
+      {/* Navigation */}
+      <nav className="border-b border-white/10">
+        <div className="max-w-7xl mx-auto px-6 py-4 flex justify-between items-center">
           <div className="flex items-center gap-3">
-              <div className="bg-primary p-2.5 rounded-xl shadow-lg shadow-primary/20">
-                <Zap className="h-6 w-6 text-white fill-current"/>
-              </div>
-              <div>
-                <h1 className="text-2xl font-bold tracking-tight text-white">
-                    AverPay
-                </h1>
-                <p className="text-[10px] uppercase tracking-[0.2em] text-primary font-bold">by Averon Workforce</p>
-              </div>
+            <div className="bg-primary p-2 rounded-lg">
+              <Zap className="h-6 w-6 text-white fill-current" />
+            </div>
+            <div>
+              <h1 className="text-2xl font-bold text-white">AverPay</h1>
+              <p className="text-xs text-primary">by Averon Workforce</p>
+            </div>
           </div>
-          <nav className="flex items-center gap-4">
-             <Link href="/login" className="hidden md:block text-sm font-medium text-muted-foreground hover:text-white transition-colors">
+          <div className="flex items-center gap-4">
+            <Link href="/login">
+              <Button variant="ghost" size="sm">
                 Sign In
-             </Link>
-             <Link href="/signup" className="hidden md:block text-sm font-medium text-muted-foreground hover:text-white transition-colors">
+              </Button>
+            </Link>
+            <Link href="/signup">
+              <Button size="sm" className="bg-primary hover:bg-primary/90">
                 Sign Up
-             </Link>
-             <Link href="/signup">
-                <Button variant="outline" className="border-primary/20 hover:bg-primary/10">Apply Now</Button>
-             </Link>
-          </nav>
-        </header>
+              </Button>
+            </Link>
+          </div>
+        </div>
+      </nav>
 
-        <main className="relative z-10 container mx-auto px-6 pt-16 md:pt-24 lg:pt-32 text-center max-w-5xl">
-          <div className="space-y-8">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 border border-primary/20 text-primary text-xs font-bold uppercase tracking-wider mb-4 animate-in fade-in">
-               <span className="relative flex h-2 w-2">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75"></span>
-                  <span className="relative inline-flex rounded-full h-2 w-2 bg-primary"></span>
-                </span>
-               Platform v4.0 is Live
-            </div>
-            
-            <h2 className="text-5xl md:text-7xl lg:text-8xl font-black tracking-tight text-white leading-[0.9]">
-              Your Freelance Career <br />
-              <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary via-blue-400 to-primary">In Your Hands</span>
-            </h2>
-            
-            <p className="mt-8 text-xl text-muted-foreground max-w-2xl mx-auto leading-relaxed">
-              The official portal for Averon Workforce members. Accept projects, track live earnings, and execute secure international withdrawals on one high-performance platform.
-            </p>
-
-            <div className="mt-12 flex flex-col sm:flex-row items-center justify-center gap-6">
-              <Link href="/login" className="w-full sm:w-auto">
-                <Button size="lg" className="w-full sm:w-auto h-16 px-10 text-lg font-bold bg-primary hover:bg-primary/90 shadow-2xl shadow-primary/30 group">
-                  ACCESS DASHBOARD
-                  <ArrowRight className="ml-2 h-5 w-5 transition-transform group-hover:translate-x-1" />
-                </Button>
-              </Link>
-              <Link href="#features" className="w-full sm:w-auto">
-                 <Button variant="ghost" size="lg" className="w-full sm:w-auto h-16 px-10 text-lg font-bold text-white hover:bg-white/5 border border-white/10">
-                    Learn More
-                 </Button>
-              </Link>
-            </div>
+      {/* Hero Section */}
+      <section className="relative overflow-hidden py-20 px-6">
+        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full h-96 bg-gradient-to-b from-primary/10 to-transparent pointer-events-none" />
+        
+        <div className="max-w-7xl mx-auto text-center relative z-10">
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 border border-primary/20 text-primary text-xs font-bold uppercase tracking-wider mb-6">
+            <span className="relative flex h-2 w-2">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-primary"></span>
+            </span>
+            Platform v4.0 is Live
           </div>
 
-          {/* Stats Grid from Screenshot */}
-          <div className="mt-24 md:mt-32 grid grid-cols-2 lg:grid-cols-4 gap-4 md:gap-8 max-w-6xl mx-auto">
+          <h2 className="text-5xl md:text-7xl font-black tracking-tight text-white leading-tight mb-6">
+            Your Freelance Career <br />
+            <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary via-blue-400 to-primary">
+              In Your Hands
+            </span>
+          </h2>
+
+          <p className="text-xl text-muted-foreground max-w-2xl mx-auto mb-8">
+            The official portal for Averon Workforce members. Accept projects, track earnings, and execute secure withdrawals.
+          </p>
+
+          <div className="flex flex-col sm:flex-row gap-4 justify-center mb-16">
+            <Link href="/signup">
+              <Button size="lg" className="h-14 px-8 text-lg bg-primary hover:bg-primary/90 group">
+                Get Started
+                <ArrowRight className="ml-2 h-5 w-5 group-hover:translate-x-1 transition" />
+              </Button>
+            </Link>
+            <Link href="/login">
+              <Button size="lg" variant="outline" className="h-14 px-8 text-lg">
+                Sign In
+              </Button>
+            </Link>
+          </div>
+
+          {/* Stats */}
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 max-w-4xl mx-auto">
             {stats.map((stat) => (
-              <div key={stat.label} className="group p-8 md:p-10 rounded-[2rem] bg-white/5 border border-white/10 hover:border-primary/50 hover:bg-white/[0.08] transition-all duration-300 text-center">
-                 <div className="text-4xl md:text-5xl font-black text-white mb-2 group-hover:scale-110 transition-transform duration-500">
-                  {stat.value}
-                 </div>
-                 <div className="text-sm font-bold uppercase tracking-[0.2em] text-muted-foreground">
-                   {stat.label}
-                 </div>
+              <div key={stat.label} className="bg-white/5 border border-white/10 rounded-xl p-6">
+                <div className="text-3xl font-bold text-white">{stat.value}</div>
+                <div className="text-sm text-muted-foreground mt-1">{stat.label}</div>
               </div>
             ))}
           </div>
-        </main>
+        </div>
+      </section>
 
-        <section id="features" className="py-24 md:py-40 bg-[#030a1c] mt-24">
-          <div className="container mx-auto px-6">
-            <div className="max-w-3xl mb-16 md:mb-24">
-                <h3 className="text-4xl md:text-6xl font-bold tracking-tight text-white mb-6">Everything You Need</h3>
-                <p className="text-xl text-muted-foreground leading-relaxed">
-                  All the tools for your freelance career with Averon Workforce, consolidated into one high-performance, secure, and intuitive dashboard.
-                </p>
-            </div>
-            
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-              {features.map((feature) => (
-                <div key={feature.title} className="p-10 rounded-[2rem] border border-white/5 flex flex-col items-start gap-8 text-left bg-[#050f26] hover:border-primary/30 hover:translate-y-[-8px] transition-all duration-300">
-                  <div className="bg-primary/10 text-primary p-4 rounded-2xl">
-                    <feature.icon className="w-8 h-8" />
-                  </div>
-                  <div className="flex-1">
-                    <h4 className="text-2xl font-bold text-white">{feature.title}</h4>
-                    <p className="mt-4 text-muted-foreground text-lg leading-relaxed">
-                      {feature.description}
-                    </p>
-                  </div>
-                </div>
-              ))}
-            </div>
+      {/* Features Section */}
+      <section className="py-20 px-6 bg-[#050f26]">
+        <div className="max-w-7xl mx-auto">
+          <h3 className="text-4xl font-bold text-white text-center mb-4">Everything You Need</h3>
+          <p className="text-muted-foreground text-center mb-12 max-w-2xl mx-auto">
+            All the tools for your freelance career in one high-performance, secure platform.
+          </p>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {features.map((feature) => (
+              <div
+                key={feature.title}
+                className="bg-[#020817] border border-white/10 rounded-xl p-8 hover:border-primary/50 transition"
+              >
+                <div className="text-4xl mb-4">{feature.icon}</div>
+                <h4 className="text-xl font-bold text-white mb-2">{feature.title}</h4>
+                <p className="text-muted-foreground">{feature.description}</p>
+              </div>
+            ))}
           </div>
-        </section>
+        </div>
+      </section>
 
-        <section className="py-24 md:py-40 relative overflow-hidden">
-             <div className="absolute inset-0 bg-primary/5 pointer-events-none" />
-            <div className="container mx-auto px-6 text-center relative z-10">
-                <div className="max-w-4xl mx-auto">
-                    <h3 className="text-4xl md:text-7xl font-bold tracking-tighter text-white">Join the Global Workforce</h3>
-                    <p className="mt-8 text-xl text-muted-foreground leading-relaxed">
-                        Become part of the most secure and reliable freelance management ecosystem. Access premium projects and track your global earnings with ease.
-                    </p>
-                    <div className="mt-12">
-                        <Link href="/signup">
-                            <Button size="lg" className="h-16 px-12 text-xl font-black shadow-2xl shadow-primary/20">
-                                START YOUR APPLICATION
-                            </Button>
-                        </Link>
-                    </div>
-                </div>
-            </div>
-        </section>
-      </div>
+      {/* CTA Section */}
+      <section className="py-20 px-6">
+        <div className="max-w-4xl mx-auto text-center">
+          <h3 className="text-4xl font-bold text-white mb-6">
+            Ready to Grow Your Career?
+          </h3>
+          <p className="text-muted-foreground text-lg mb-8">
+            Join thousands of freelancers earning with Averon Workforce.
+          </p>
+          <Link href="/signup">
+            <Button size="lg" className="h-14 px-8 text-lg bg-primary hover:bg-primary/90">
+              Start Your Application
+            </Button>
+          </Link>
+        </div>
+      </section>
+
+      {/* Footer */}
+      <footer className="border-t border-white/10 py-8 px-6 text-center text-muted-foreground text-sm">
+        <p>&copy; {new Date().getFullYear()} Averon Workforce. All rights reserved.</p>
+      </footer>
     </div>
   );
 }
