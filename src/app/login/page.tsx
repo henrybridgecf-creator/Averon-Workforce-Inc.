@@ -1,16 +1,16 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
-import { Eye, EyeOff, Loader2, MapPin } from 'lucide-react';
+import { Eye, EyeOff, Loader2, Mail, Lock } from 'lucide-react';
 
 export default function LoginPage() {
   const router = useRouter();
-  const { login, updateUserLocation } = useAuth();
+  const { login, user, updateUserLocation } = useAuth();
   const { toast } = useToast();
 
   const [formData, setFormData] = useState({
@@ -21,6 +21,12 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
 
+  useEffect(() => {
+    if (user) {
+      router.push('/dashboard');
+    }
+  }, [user, router]);
+
   // Get user location on mount
   useEffect(() => {
     if ('geolocation' in navigator) {
@@ -28,13 +34,11 @@ export default function LoginPage() {
         async (position) => {
           try {
             const { latitude, longitude } = position.coords;
-            // Get address from coordinates (reverse geocoding)
             const response = await fetch(
               `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}`
             );
             const data = await response.json();
             const address = data.address?.city || data.address?.country || 'Unknown';
-            
             localStorage.setItem(
               'userLocation',
               JSON.stringify({ latitude, longitude, address })
@@ -58,6 +62,15 @@ export default function LoginPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
+    if (!formData.email || !formData.password) {
+      toast({
+        title: 'Validation Error',
+        description: 'Please fill in all fields',
+        variant: 'destructive',
+      });
+      return;
+    }
+
     try {
       setLoading(true);
       await login(formData.email, formData.password);
@@ -71,16 +84,22 @@ export default function LoginPage() {
 
       toast({
         title: 'Success',
-        description: 'Logged in successfully! Redirecting...',
+        description: 'Logged in successfully!',
       });
 
       setTimeout(() => {
         router.push('/dashboard');
-      }, 1500);
+      }, 500);
     } catch (error: any) {
+      const errorMessage = error.code === 'auth/user-not-found'
+        ? 'User not found. Please sign up.'
+        : error.code === 'auth/wrong-password'
+        ? 'Invalid password.'
+        : error.message || 'Login failed';
+      
       toast({
         title: 'Login Error',
-        description: error.message || 'Invalid email or password',
+        description: errorMessage,
         variant: 'destructive',
       });
     } finally {
@@ -89,13 +108,13 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen bg-[#020817] text-foreground flex flex-col items-center justify-center px-4 py-8">
+    <div className="min-h-screen bg-[#020817] flex items-center justify-center px-4 py-8">
       <div className="w-full max-w-md">
         {/* Header */}
         <div className="text-center mb-8">
           <div className="inline-flex items-center gap-3 mb-4">
             <div className="bg-primary p-2 rounded-lg">
-              <span className="text-2xl font-bold text-white">💰</span>
+              <span className="text-2xl">💰</span>
             </div>
             <div>
               <h1 className="text-3xl font-bold text-white">AverPay</h1>
@@ -111,29 +130,35 @@ export default function LoginPage() {
           {/* Email */}
           <div>
             <label className="block text-sm font-medium text-white mb-2">Email Address</label>
-            <input
-              type="email"
-              name="email"
-              value={formData.email}
-              onChange={handleChange}
-              placeholder="john@example.com"
-              className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg text-white placeholder:text-muted-foreground focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/30"
-              required
-            />
+            <div className="relative">
+              <Mail className="absolute left-3 top-3 h-5 w-5 text-muted-foreground" />
+              <input
+                type="email"
+                name="email"
+                value={formData.email}
+                onChange={handleChange}
+                placeholder="john@example.com"
+                className="w-full pl-10 pr-4 py-3 bg-white/5 border border-white/10 rounded-lg text-white placeholder:text-muted-foreground focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/30"
+                required
+                disabled={loading}
+              />
+            </div>
           </div>
 
           {/* Password */}
           <div>
             <label className="block text-sm font-medium text-white mb-2">Password</label>
             <div className="relative">
+              <Lock className="absolute left-3 top-3 h-5 w-5 text-muted-foreground" />
               <input
                 type={showPassword ? 'text' : 'password'}
                 name="password"
                 value={formData.password}
                 onChange={handleChange}
                 placeholder="••••••••"
-                className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg text-white placeholder:text-muted-foreground focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/30"
+                className="w-full pl-10 pr-10 py-3 bg-white/5 border border-white/10 rounded-lg text-white placeholder:text-muted-foreground focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/30"
                 required
+                disabled={loading}
               />
               <button
                 type="button"
@@ -143,14 +168,6 @@ export default function LoginPage() {
                 {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
               </button>
             </div>
-          </div>
-
-          {/* Location Info */}
-          <div className="p-3 bg-primary/10 border border-primary/20 rounded-lg flex items-start gap-2">
-            <MapPin className="h-4 w-4 text-primary mt-0.5 flex-shrink-0" />
-            <p className="text-xs text-muted-foreground">
-              Your location will be recorded upon login for security and admin notifications.
-            </p>
           </div>
 
           {/* Submit */}

@@ -1,16 +1,16 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
-import { Eye, EyeOff, Loader2 } from 'lucide-react';
+import { Eye, EyeOff, Loader2, Mail, Lock, User, Phone } from 'lucide-react';
 
 export default function SignupPage() {
   const router = useRouter();
-  const { signup } = useAuth();
+  const { signup, user } = useAuth();
   const { toast } = useToast();
 
   const [formData, setFormData] = useState({
@@ -18,35 +18,40 @@ export default function SignupPage() {
     email: '',
     password: '',
     confirmPassword: '',
+    phoneNumber: '',
   });
 
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (user) {
+      router.push('/dashboard');
+    }
+  }, [user, router]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-
+  const validateForm = () => {
     if (!formData.fullName.trim()) {
       toast({
         title: 'Validation Error',
-        description: 'Please enter your full name',
+        description: 'Full name is required',
         variant: 'destructive',
       });
-      return;
+      return false;
     }
 
-    if (formData.password !== formData.confirmPassword) {
+    if (!formData.email.trim() || !formData.email.includes('@')) {
       toast({
         title: 'Validation Error',
-        description: 'Passwords do not match',
+        description: 'Valid email is required',
         variant: 'destructive',
       });
-      return;
+      return false;
     }
 
     if (formData.password.length < 6) {
@@ -55,25 +60,47 @@ export default function SignupPage() {
         description: 'Password must be at least 6 characters',
         variant: 'destructive',
       });
-      return;
+      return false;
     }
 
-    try {
-      setLoading(true);
-      await signup(formData.email, formData.password, formData.fullName);
-      
+    if (formData.password !== formData.confirmPassword) {
       toast({
-        title: 'Success',
-        description: 'Account created successfully! Redirecting to dashboard...',
+        title: 'Validation Error',
+        description: 'Passwords do not match',
+        variant: 'destructive',
+      });
+      return false;
+    }
+
+    return true;
+  };
+
+  const handleSignup = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    if (!validateForm()) return;
+
+    setLoading(true);
+
+    try {
+      await signup(formData.email, formData.password, formData.fullName, formData.phoneNumber);
+
+      toast({
+        title: 'Signup Successful!',
+        description: 'Your account has been created. Redirecting to dashboard...',
       });
 
       setTimeout(() => {
         router.push('/dashboard');
       }, 1500);
     } catch (error: any) {
+      const errorMessage = error.code === 'auth/email-already-in-use'
+        ? 'Email already in use. Please login instead.'
+        : error.message || 'Signup failed';
+      
       toast({
         title: 'Signup Error',
-        description: error.message || 'Failed to create account',
+        description: errorMessage,
         variant: 'destructive',
       });
     } finally {
@@ -82,13 +109,13 @@ export default function SignupPage() {
   };
 
   return (
-    <div className="min-h-screen bg-[#020817] text-foreground flex flex-col items-center justify-center px-4 py-8">
+    <div className="min-h-screen bg-[#020817] flex items-center justify-center px-4 py-8">
       <div className="w-full max-w-md">
         {/* Header */}
         <div className="text-center mb-8">
           <div className="inline-flex items-center gap-3 mb-4">
             <div className="bg-primary p-2 rounded-lg">
-              <span className="text-2xl font-bold text-white">💰</span>
+              <span className="text-2xl">💰</span>
             </div>
             <div>
               <h1 className="text-3xl font-bold text-white">AverPay</h1>
@@ -100,47 +127,74 @@ export default function SignupPage() {
         </div>
 
         {/* Form */}
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSignup} className="space-y-4">
           {/* Full Name */}
           <div>
             <label className="block text-sm font-medium text-white mb-2">Full Name</label>
-            <input
-              type="text"
-              name="fullName"
-              value={formData.fullName}
-              onChange={handleChange}
-              placeholder="John Doe"
-              className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg text-white placeholder:text-muted-foreground focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/30"
-              required
-            />
+            <div className="relative">
+              <User className="absolute left-3 top-3 h-5 w-5 text-muted-foreground" />
+              <input
+                type="text"
+                name="fullName"
+                value={formData.fullName}
+                onChange={handleChange}
+                placeholder="John Doe"
+                className="w-full pl-10 pr-4 py-3 bg-white/5 border border-white/10 rounded-lg text-white placeholder:text-muted-foreground focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/30"
+                required
+                disabled={loading}
+              />
+            </div>
           </div>
 
           {/* Email */}
           <div>
             <label className="block text-sm font-medium text-white mb-2">Email Address</label>
-            <input
-              type="email"
-              name="email"
-              value={formData.email}
-              onChange={handleChange}
-              placeholder="john@example.com"
-              className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg text-white placeholder:text-muted-foreground focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/30"
-              required
-            />
+            <div className="relative">
+              <Mail className="absolute left-3 top-3 h-5 w-5 text-muted-foreground" />
+              <input
+                type="email"
+                name="email"
+                value={formData.email}
+                onChange={handleChange}
+                placeholder="you@example.com"
+                className="w-full pl-10 pr-4 py-3 bg-white/5 border border-white/10 rounded-lg text-white placeholder:text-muted-foreground focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/30"
+                required
+                disabled={loading}
+              />
+            </div>
+          </div>
+
+          {/* Phone Number */}
+          <div>
+            <label className="block text-sm font-medium text-white mb-2">Phone (Optional)</label>
+            <div className="relative">
+              <Phone className="absolute left-3 top-3 h-5 w-5 text-muted-foreground" />
+              <input
+                type="tel"
+                name="phoneNumber"
+                value={formData.phoneNumber}
+                onChange={handleChange}
+                placeholder="+1 (555) 000-0000"
+                className="w-full pl-10 pr-4 py-3 bg-white/5 border border-white/10 rounded-lg text-white placeholder:text-muted-foreground focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/30"
+                disabled={loading}
+              />
+            </div>
           </div>
 
           {/* Password */}
           <div>
             <label className="block text-sm font-medium text-white mb-2">Password</label>
             <div className="relative">
+              <Lock className="absolute left-3 top-3 h-5 w-5 text-muted-foreground" />
               <input
                 type={showPassword ? 'text' : 'password'}
                 name="password"
                 value={formData.password}
                 onChange={handleChange}
                 placeholder="••••••••"
-                className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg text-white placeholder:text-muted-foreground focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/30"
+                className="w-full pl-10 pr-10 py-3 bg-white/5 border border-white/10 rounded-lg text-white placeholder:text-muted-foreground focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/30"
                 required
+                disabled={loading}
               />
               <button
                 type="button"
@@ -163,6 +217,7 @@ export default function SignupPage() {
               placeholder="••••••••"
               className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg text-white placeholder:text-muted-foreground focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/30"
               required
+              disabled={loading}
             />
           </div>
 
