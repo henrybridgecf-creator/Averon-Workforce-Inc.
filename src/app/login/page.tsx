@@ -91,12 +91,22 @@ export default function LoginPage() {
         router.push('/dashboard');
       }, 500);
     } catch (error: any) {
-      const errorMessage = error.code === 'auth/user-not-found'
-        ? 'User not found. Please sign up.'
-        : error.code === 'auth/wrong-password'
-        ? 'Invalid password.'
-        : error.message || 'Login failed';
-      
+      let errorMessage = 'Login failed';
+
+      if (error.code === 'auth/user-not-found') {
+        errorMessage = 'No account found with this email. Please contact admin for approval.';
+      } else if (error.code === 'auth/wrong-password') {
+        errorMessage = 'Incorrect password. Please try again.';
+      } else if (error.code === 'auth/invalid-email') {
+        errorMessage = 'Invalid email address.';
+      } else if (error.code === 'auth/user-disabled') {
+        errorMessage = 'This account has been disabled by admin.';
+      } else if (error.code === 'auth/too-many-requests') {
+        errorMessage = 'Too many login attempts. Please try again later.';
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+
       toast({
         title: 'Login Error',
         description: errorMessage,
@@ -129,7 +139,9 @@ export default function LoginPage() {
         <form onSubmit={handleSubmit} className="space-y-4">
           {/* Email */}
           <div>
-            <label className="block text-sm font-medium text-white mb-2">Email Address</label>
+            <label className="block text-sm font-medium text-white mb-2">
+              Email Address
+            </label>
             <div className="relative">
               <Mail className="absolute left-3 top-3 h-5 w-5 text-muted-foreground" />
               <input
@@ -138,7 +150,7 @@ export default function LoginPage() {
                 value={formData.email}
                 onChange={handleChange}
                 placeholder="john@example.com"
-                className="w-full pl-10 pr-4 py-3 bg-white/5 border border-white/10 rounded-lg text-white placeholder:text-muted-foreground focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/30"
+                className="w-full pl-10 pr-4 py-3 bg-white/5 border border-white/10 rounded-lg text-white placeholder:text-muted-foreground focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/50 transition-all"
                 required
                 disabled={loading}
               />
@@ -156,16 +168,21 @@ export default function LoginPage() {
                 value={formData.password}
                 onChange={handleChange}
                 placeholder="••••••••"
-                className="w-full pl-10 pr-10 py-3 bg-white/5 border border-white/10 rounded-lg text-white placeholder:text-muted-foreground focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/30"
+                className="w-full pl-10 pr-10 py-3 bg-white/5 border border-white/10 rounded-lg text-white placeholder:text-muted-foreground focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/50 transition-all"
                 required
                 disabled={loading}
               />
               <button
                 type="button"
                 onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-3 top-1/2 transform -translate-y-1/2 text-muted-foreground hover:text-white"
+                className="absolute right-3 top-1/2 transform -translate-y-1/2 text-muted-foreground hover:text-white transition-colors"
+                disabled={loading}
               >
-                {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+                {showPassword ? (
+                  <EyeOff className="h-5 w-5" />
+                ) : (
+                  <Eye className="h-5 w-5" />
+                )}
               </button>
             </div>
           </div>
@@ -174,7 +191,7 @@ export default function LoginPage() {
           <Button
             type="submit"
             disabled={loading}
-            className="w-full h-12 bg-primary hover:bg-primary/90 text-white font-bold mt-6"
+            className="w-full h-12 bg-primary hover:bg-primary/90 text-white font-bold mt-6 transition-all"
           >
             {loading ? (
               <>
@@ -188,12 +205,19 @@ export default function LoginPage() {
         </form>
 
         {/* Footer */}
-        <p className="text-center text-muted-foreground text-sm mt-6">
-          Don't have an account?{' '}
-          <Link href="/signup" className="text-primary hover:underline font-medium">
-            Create one now
-          </Link>
-        </p>
+        <div className="mt-8 pt-6 border-t border-white/10 space-y-4">
+          <p className="text-center text-muted-foreground text-sm">
+            Don't have an account?{' '}
+            <Link href="/apply" className="text-primary hover:underline font-medium">
+              Apply here
+            </Link>
+          </p>
+          <p className="text-center text-xs text-muted-foreground">
+            <Link href="/" className="text-primary hover:underline">
+              Back to Home
+            </Link>
+          </p>
+        </div>
       </div>
     </div>
   );
